@@ -12,7 +12,6 @@ import 'home_page.dart';
 import 'register.dart';
 import 'forgot_password.dart';
 import 'config/api_config.dart';
-import 'google_ads_approval.dart';
 
 // ==================== LOGO MODEL ====================
 class AppLogo {
@@ -304,8 +303,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   _buildDivider(),
                   const SizedBox(height: 20),
                   _buildRegisterButton(),
-                  const SizedBox(height: 20),
-                  _buildGoogleAdsApprovalButton(),
                 ],
               ),
             ),
@@ -548,47 +545,6 @@ class _LoginScreenState extends State<LoginScreen> {
             fontSize: 18,
             color: primaryColor,
             fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ====================================================================
-  // 🔘 GOOGLE ADS APPROVAL BUTTON
-  // ====================================================================
-  Widget _buildGoogleAdsApprovalButton() {
-    return Container(
-      width: double.infinity,
-      height: 55,
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        border: Border.all(color: Colors.amber.shade700, width: 1.5),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: ElevatedButton.icon(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const GoogleAdsApprovalScreen(),
-            ),
-          );
-        },
-        icon: Icon(Icons.verified_user_rounded, color: Colors.amber.shade800),
-        label: Text(
-          "Google Ads Approval",
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.amber.shade900,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
           ),
         ),
       ),
