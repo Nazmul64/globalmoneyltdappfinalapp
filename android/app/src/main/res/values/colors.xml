@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 📁 File: android/app/src/main/res/values/colors.xml -->
+<resources>
+    <!-- ✅ OneSignal notification color -->
+    <color name="notification_color">#2196F3</color>
+
+    <!-- ✅ Primary color -->
+    <color name="colorPrimary">#2196F3</color>
+
+    <!-- ✅ Primary dark color -->
+    <color name="colorPrimaryDark">#1976D2</color>
+
+    <!-- ✅ Accent color -->
+    <color name="colorAccent">#FF4081</color>
+</resources>

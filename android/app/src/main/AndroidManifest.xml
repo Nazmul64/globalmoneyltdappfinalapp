@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.globalmoneyltd.globalmoneyltd">
+
+    <!-- ====================================================================
+         🔔 PERMISSIONS
+         ==================================================================== -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- 🔔 Notification permission (Android 13+) - IMPORTANT -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ====================================================================
+         📱 APPLICATION
+         ==================================================================== -->
+    <application
+        android:name="${applicationName}"
+        android:label="Global Money Ltd"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true">
+
+        <!-- ====================================================================
+             📢 START.IO ADS
+             ==================================================================== -->
+        <meta-data
+            android:name="com.startapp.sdk.APPLICATION_ID"
+            android:value="209922521" />
+
+        <meta-data
+            android:name="com.startapp.sdk.ENABLE_RETURN_ADS"
+            android:value="true" />
+
+        <!-- ====================================================================
+             📢 GOOGLE ADMOB
+             ==================================================================== -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3308969201135774~8261496951" />
+
+        <!-- ====================================================================
+             📱 MAIN ACTIVITY
+             ==================================================================== -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+
+            <!-- Flutter Normal Theme -->
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+
+            <!-- ===== LAUNCHER ===== -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- ===== DEEP LINK (Password Reset) ===== -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="myapp"
+                    android:host="reset-password" />
+            </intent-filter>
+
+            <!-- ===== NOTIFICATION CLICK ACTION ===== -->
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- ====================================================================
+             🔔 ONESIGNAL NOTIFICATION CONFIGURATION
+             ==================================================================== -->
+
+        <!-- OneSignal notification accent color -->
+        <meta-data
+            android:name="com.onesignal.NotificationAccentColor.DEFAULT"
+            android:value="#2196F3" />
+
+        <!-- OneSignal small notification icon -->
+        <meta-data
+            android:name="com.onesignal.small_icon"
+            android:resource="@mipmap/ic_launcher" />
+
+        <!-- OneSignal large notification icon -->
+        <meta-data
+            android:name="com.onesignal.large_icon"
+            android:resource="@mipmap/ic_launcher" />
+
+        <!-- ====================================================================
+             🎯 FLUTTER EMBEDDING
+             ==================================================================== -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+    </application>
+
+    <!-- ====================================================================
+         🔍 QUERIES (Android 11+)
+         ==================================================================== -->
+    <queries>
+        <!-- Text processing -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+
+        <!-- Share functionality -->
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+
+        <!-- HTTP links -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+
+        <!-- HTTPS links -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+</manifest>
