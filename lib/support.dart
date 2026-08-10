@@ -4,8 +4,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'config/api_config.dart';
+import 'services/auth_service.dart';
+import 'screens/support_registration_screen.dart';
+import 'screens/support_live_chat_screen.dart';
 
 String get baseUrl => ApiConfig.mediaBaseUrl;
+
 
 class SupportCenterPage extends StatefulWidget {
   const SupportCenterPage({super.key});
@@ -417,10 +421,42 @@ class _SupportCenterPageState extends State<SupportCenterPage>
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _openSupportChat,
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('Chat with Support Admin'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: safeThemeColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+
+  Future<void> _openSupportChat() async {
+    final token = await AuthService().getToken();
+    if (!mounted) return;
+    if (token == null || token.isEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const SupportRegistrationScreen()),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const SupportLiveChatScreen()),
+      );
+    }
+  }
+
 
   Widget _buildSupportCard(SupportItem item) {
     return InkWell(

@@ -20,10 +20,10 @@ class ApiConfig {
   static const bool isLocalMode = true;
 
   /// 🖥️ LOCAL SERVER URL:
+  /// - Real Phone / Wi-Fi Network: 'http://192.168.0.101:8000'
   /// - Android Emulator: 'http://10.0.2.2:8000'
-  /// - Windows / Web / Desktop: 'http://127.0.0.1:8000' or 'http://localhost:8000'
-  /// - Real Phone on Wi-Fi: 'http://YOUR-PC-IP:8000' (e.g. 'http://192.168.1.100:8000')
-  static const String localServerUrl = 'http://10.0.2.2:8000';
+  static const String localServerUrl = 'http://192.168.0.101:8000';
+
 
   /// 🌐 LIVE PRODUCTION SERVER URL
   static const String liveServerUrl = 'https://globalmoney.ltd';
@@ -56,11 +56,23 @@ class ApiConfig {
   // ──────────────────────────────────────────────────────────────────
   // 1. AUTHENTICATION & PASSWORD RECOVERY
   // ──────────────────────────────────────────────────────────────────
-  static const String register        = '$baseUrl/register';
-  static const String login           = '$baseUrl/login';
-  static const String logout          = '$baseUrl/logout';
-  static const String passwordEmail   = '$baseUrl/password/email';
-  static const String passwordReset   = '$baseUrl/password/reset';
+  static String get register            => '$activeBaseUrl/register';
+  static String get login               => '$activeBaseUrl/login';
+  static String get logout              => '$activeBaseUrl/logout';
+  static String get passwordEmail       => '$activeBaseUrl/password/email';
+  static String get passwordReset       => '$activeBaseUrl/password/reset';
+
+  // ──────────────────────────────────────────────────────────────────
+  // 🔑 V1 FLUTTER INTEGRATION ENDPOINTS
+  // ──────────────────────────────────────────────────────────────────
+  static String get v1SupportRegister   => '$activeBaseUrl/v1/support/register';
+  static String get v1User              => '$activeBaseUrl/v1/user';
+  static String get v1LicenseStatus     => '$activeBaseUrl/v1/license/status';
+  static String get v1LicenseActivate   => '$activeBaseUrl/v1/license/activate';
+  static String get v1SupportConvo      => '$activeBaseUrl/v1/support/conversation';
+  static String get v1SupportMessages   => '$activeBaseUrl/v1/support/messages';
+  static String get v1QrVerify          => '$activeBaseUrl/v1/qr/verify';
+
 
   // ──────────────────────────────────────────────────────────────────
   // 2. USER PROFILE & KYC
@@ -174,6 +186,7 @@ class ApiConfig {
   static const String support           = '$baseUrl/support';
   static const String howToWork         = '$baseUrl/howtowork';
   static const String homeCards         = '$baseUrl/home-cards';
+  static const String privacyPolicy     = '$baseUrl/privacy-policy';
 
   // ──────────────────────────────────────────────────────────────────
   // 14. MEMBERSHIP / PACKAGE BUY

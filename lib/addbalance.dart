@@ -2063,15 +2063,19 @@ class _AddBalancePageState extends State<AddBalancePage>
                         border: Border.all(color: themeColor!.withOpacity(0.2)),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.account_balance_wallet,
-                            size: 18,
-                            color: themeColor,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Icon(
+                              Icons.account_balance_wallet,
+                              size: 18,
+                              color: themeColor,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
+                            child: SelectableText(
                               selectedPaymentMethod!['method_number']
                                       ?.toString() ??
                                   'N/A',
@@ -2081,8 +2085,6 @@ class _AddBalancePageState extends State<AddBalancePage>
                                 color: Colors.black87,
                                 letterSpacing: 0.5,
                               ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
                             ),
                           ),
                         ],
@@ -2350,10 +2352,13 @@ class _AddBalancePageState extends State<AddBalancePage>
                 }
 
                 if (enteredAmount > 0 && rate != null && rate > 0) {
-                  final convertedUsd = enteredAmount / rate;
+                  final totalBdt = enteredAmount * rate;
+                  final formattedBdt = totalBdt.toStringAsFixed(totalBdt.truncateToDouble() == totalBdt ? 0 : 2);
+                  final formattedRate = rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 2);
+
                   return Container(
                     margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.green.shade50,
                       borderRadius: BorderRadius.circular(8),
@@ -2361,13 +2366,13 @@ class _AddBalancePageState extends State<AddBalancePage>
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calculate, size: 16, color: Colors.green.shade700),
+                        Icon(Icons.calculate, size: 18, color: Colors.green.shade700),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Converted USD: \$${convertedUsd.toStringAsFixed(2)} USD  (Rate: 1 USD = $rate BDT)',
+                            'Total Pay: $formattedBdt BDT  (Rate: 1 USD = $formattedRate BDT)',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: Colors.green.shade800,
                             ),

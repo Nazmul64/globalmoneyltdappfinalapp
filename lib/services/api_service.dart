@@ -12,8 +12,10 @@ import '../config/api_config.dart';
 String get baseUrl => ApiConfig.baseUrl;
 
 class ApiService {
-  // ✅ Base URL (নিশ্চিত করুন স্পেস নেই)
-  // URL: use ApiConfig.baseUrl
+  // ✅ Persistent HTTP Client with Keep-Alive Connection Pooling
+  static final http.Client _client = http.Client();
+  static http.Client get client => _client;
+
   static const Duration timeout = Duration(seconds: 30);
   static String? _cachedToken;
 

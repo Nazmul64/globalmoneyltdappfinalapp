@@ -37,20 +37,13 @@ void main() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundMessageHandler);
     debugPrint('✅ Firebase initialized');
 
-    // ✅ STEP 2: Initialize Firebase Notification Service
-    debugPrint('🔥 Initializing Firebase Notification Service...');
-    await FirebaseNotificationService().initialize();
-    debugPrint('✅ Firebase Notification Service initialized');
-
-    // ✅ STEP 3: Initialize OneSignal
-    debugPrint('🔔 Initializing OneSignal...');
-    await OneSignalNotificationService().initialize();
-    debugPrint('✅ OneSignal initialized');
-
-    // ✅ STEP 4: Preload App Theme Color (cached in AppService singleton)
-    debugPrint('🎨 Preloading theme color...');
-    await AppService().preloadTheme();
-    debugPrint('✅ Theme color preloaded');
+    // ✅ STEP 2, 3, 4: Concurrently initialize Notification Services & App Theme for sub-1s boot
+    debugPrint('⚡ Initializing Services in Parallel...');
+    await Future.wait([
+      FirebaseNotificationService().initialize(),
+      OneSignalNotificationService().initialize(),
+      AppService().preloadTheme(),
+    ]);
 
     debugPrint('═══════════════════════════════════════════════════');
     debugPrint('✅ ALL SERVICES INITIALIZED SUCCESSFULLY');

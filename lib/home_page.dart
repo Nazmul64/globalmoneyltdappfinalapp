@@ -1759,12 +1759,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: Text('Close', style: TextStyle(color: primaryColor)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const TaskPage()),
               );
+              if (mounted) {
+                fetchData();
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,

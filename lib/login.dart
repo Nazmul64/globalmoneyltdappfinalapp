@@ -12,6 +12,7 @@ import 'home_page.dart';
 import 'register.dart';
 import 'forgot_password.dart';
 import 'config/api_config.dart';
+import 'services/app_service.dart';
 
 // ==================== LOGO MODEL ====================
 class AppLogo {
@@ -166,16 +167,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _isThemeLoading = true;
-  bool _isCheckingLogin = true;
 
   AppTheme? _appTheme;
   AppLogo? _appLogo;
 
-  Color get primaryColor => _appTheme?.primaryColor ?? const Color(0xFFFF6347);
+  Color get primaryColor =>
+      _appTheme?.primaryColor ?? AppService().themeColorSync;
   List<Color> get gradientColors =>
       _appTheme?.gradientColors ??
-          [const Color(0xFFFF6347), const Color(0xFFFF7F5C)];
+          [primaryColor, Color.lerp(primaryColor, Colors.white, 0.2) ?? primaryColor];
 
   @override
   void initState() {
@@ -184,11 +184,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ====================================================================
-  // 🚀 INITIALIZE
+  // 🚀 INITIALIZE (Non-blocking background tasks)
   // ====================================================================
   Future<void> _initialize() async {
-    await _loadTheme();
-    await _checkAutoLogin();
+    _loadTheme();
+    _checkAutoLogin();
   }
 
   // ====================================================================
@@ -199,12 +199,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
       final userId = prefs.getInt('user_id');
-
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('🔍 Checking auto-login...');
-      debugPrint('   Token exists: ${token != null}');
-      debugPrint('   User ID: $userId');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       if (token != null && token.isNotEmpty && userId != null) {
         debugPrint('✅ User already logged in!');
@@ -225,16 +219,8 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         return;
       }
-
-      debugPrint('❌ No active session. Showing login screen.');
-      if (mounted) {
-        setState(() => _isCheckingLogin = false);
-      }
     } catch (e) {
       debugPrint('❌ Auto-login check error: $e');
-      if (mounted) {
-        setState(() => _isCheckingLogin = false);
-      }
     }
   }
 
@@ -247,12 +233,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() {
           _appTheme = theme;
-          _isThemeLoading = false;
         });
       }
     } catch (e) {
       debugPrint('❌ Theme load error: $e');
-      if (mounted) setState(() => _isThemeLoading = false);
     }
   }
 
@@ -261,25 +245,6 @@ class _LoginScreenState extends State<LoginScreen> {
   // ====================================================================
   @override
   Widget build(BuildContext context) {
-    if (_isCheckingLogin || _isThemeLoading) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: primaryColor),
-              const SizedBox(height: 16),
-              const Text(
-                'Loading...',
-                style: TextStyle(fontSize: 14, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -394,14 +359,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildEmailField() {
     return TextFormField(
       controller: _emailController,
-      decoration: _inputDecoration("Enter Email"),
-      keyboardType: TextInputType.emailAddress,
+      decoration: _inputDecoration("Enter Email or Mobile Number"),
+      keyboardType: TextInputType.text,
       validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter email';
-        }
-        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-          return 'Please enter valid email';
+        if (value == null || value.trim().isEmpty) {
+          return 'Please enter Email or Mobile number';
         }
         return null;
       },
@@ -587,9 +549,10 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final loginInput = _emailController.text.trim();
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       debugPrint('🔐 ATTEMPTING LOGIN');
-      debugPrint('   Email: ${_emailController.text.trim()}');
+      debugPrint('   Input: $loginInput');
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       final response = await http
@@ -597,7 +560,9 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse(ApiConfig.login),
         headers: {"Accept": "application/json"},
         body: {
-          "email": _emailController.text.trim(),
+          "email": loginInput,
+          "mobile": loginInput,
+          "username": loginInput,
           "password": _passwordController.text,
         },
       )
@@ -670,12 +635,28 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         debugPrint('❌ Login failed: ${data["message"]}');
 
+        String errorMessage = data["message"] ?? "Login failed";
+        final errorsObj = data["errors"] ?? data["data"];
+        if (errorsObj is Map) {
+          final messagesList = <String>[];
+          errorsObj.forEach((key, val) {
+            if (val is List && val.isNotEmpty) {
+              messagesList.add(val.first.toString());
+            } else if (val is String && val.isNotEmpty) {
+              messagesList.add(val);
+            }
+          });
+          if (messagesList.isNotEmpty) {
+            errorMessage = messagesList.join('\n');
+          }
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(data["message"] ?? "Login failed"),
+              content: Text(errorMessage),
               backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),

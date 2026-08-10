@@ -1655,7 +1655,7 @@ class _MembershipPageState extends State<MembershipPage>
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = screenWidth > 600 ? 3 : 2;
     final horizontalPadding = screenWidth > 600 ? 20.0 : 14.0;
-    final childAspectRatio = screenWidth > 600 ? 0.72 : 0.68;
+    final childAspectRatio = screenWidth > 600 ? 0.72 : 0.58;
 
     return Scaffold(
       backgroundColor: AppTheme.background,

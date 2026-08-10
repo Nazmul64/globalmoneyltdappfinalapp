@@ -1,5 +1,6 @@
 // ==========================================
 // Privacy & Policy Page
+// Fully Dynamic — Loaded from Admin Backend
 // Professional Design with Theme Integration
 // ==========================================
 
@@ -11,10 +12,7 @@ import 'config/api_config.dart';
 String get _baseUrl => ApiConfig.baseUrl;
 
 // ==================== THEME MANAGER ====================
-/// 🎨 Copy this from your main file or import it
 class ThemeManager {
-  // URL: use ApiConfig.baseUrl
-
   // Default fallback colors
   static Color defaultColorStart = const Color(0xFFFF6F61);
   static Color defaultColorEnd = const Color(0xFFFF8A5C);
@@ -25,7 +23,7 @@ class ThemeManager {
   static String themeName = 'Default Theme';
   static bool isThemeLoaded = false;
 
-  /// 🎨 Database থেকে theme load করো
+  /// Load active theme from database
   static Future<bool> loadThemeFromDatabase() async {
     debugPrint('🎨 [ThemeManager] Loading theme...');
 
@@ -33,8 +31,6 @@ class ThemeManager {
       final response = await http
           .get(Uri.parse('$_baseUrl/themechange'))
           .timeout(const Duration(seconds: 10));
-
-      debugPrint('📡 Response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
@@ -50,18 +46,15 @@ class ThemeManager {
             themeColorEnd = _lightenColor(parsedColor, 0.15);
             themeName = name;
             isThemeLoaded = true;
-
-            debugPrint('✅ Theme loaded: $name');
             return true;
           }
         }
       }
 
-      debugPrint('⚠️ Using default theme');
       _useDefaultTheme();
       return false;
     } catch (e) {
-      debugPrint('❌ Error: $e');
+      debugPrint('❌ [ThemeManager] Error: $e');
       _useDefaultTheme();
       return false;
     }
@@ -149,9 +142,33 @@ class ThemeManager {
   }
 }
 
+// ==================== DATA MODEL ====================
+class PrivacyPolicyItem {
+  final int? id;
+  final String title;
+  final String description;
+  final String? updatedAt;
+
+  PrivacyPolicyItem({
+    this.id,
+    required this.title,
+    required this.description,
+    this.updatedAt,
+  });
+
+  factory PrivacyPolicyItem.fromJson(Map<String, dynamic> json) {
+    return PrivacyPolicyItem(
+      id: json['id'] is int ? json['id'] : int.tryParse('${json['id']}'),
+      title: json['title'] ?? 'Privacy Policy',
+      description: json['description'] ?? json['content'] ?? '',
+      updatedAt: json['updated_at'] ?? json['created_at'],
+    );
+  }
+}
+
 // ==================== PRIVACY POLICY SCREEN ====================
 class PrivacyPolicyScreen extends StatefulWidget {
-  const PrivacyPolicyScreen({Key? key}) : super(key: key);
+  const PrivacyPolicyScreen({super.key});
 
   @override
   State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
@@ -159,18 +176,82 @@ class PrivacyPolicyScreen extends StatefulWidget {
 
 class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
   bool _isLoading = true;
+  String? _errorMessage;
+  List<PrivacyPolicyItem> _policies = [];
+  String? _lastUpdated;
 
   @override
   void initState() {
     super.initState();
-    _loadTheme();
+    _loadData();
   }
 
-  Future<void> _loadTheme() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     await ThemeManager.loadThemeFromDatabase();
+    await _fetchPrivacyPolicy();
+
     if (mounted) {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// 📡 Fetch Privacy Policy from API
+  Future<void> _fetchPrivacyPolicy() async {
+    try {
+      final url = ApiConfig.privacyPolicy;
+      debugPrint('📡 Fetching Privacy Policy from: $url');
+
+      final response = await http.get(Uri.parse(url)).timeout(
+            const Duration(seconds: 12),
+          );
+
+      debugPrint('📡 Privacy API Response Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final List<PrivacyPolicyItem> fetchedList = [];
+
+        // Check if multiple policies returned in 'policies' array
+        if (json['policies'] != null && json['policies'] is List) {
+          final list = json['policies'] as List;
+          for (var item in list) {
+            if (item is Map<String, dynamic>) {
+              fetchedList.add(PrivacyPolicyItem.fromJson(item));
+            }
+          }
+        }
+
+        // Check main 'data' field
+        if (json['data'] != null && json['data'] is Map<String, dynamic>) {
+          final mainItem = PrivacyPolicyItem.fromJson(json['data']);
+          if (mainItem.description.trim().isNotEmpty) {
+            // Add if not already present
+            if (!fetchedList.any((p) => p.title == mainItem.title && p.description == mainItem.description)) {
+              fetchedList.insert(0, mainItem);
+            }
+            if (mainItem.updatedAt != null) {
+              _lastUpdated = mainItem.updatedAt;
+            }
+          }
+        }
+
+        if (fetchedList.isNotEmpty) {
+          _policies = fetchedList;
+          _lastUpdated ??= fetchedList.first.updatedAt;
+        } else {
+          _errorMessage = 'No privacy policy content available.';
+        }
+      } else {
+        _errorMessage = 'Failed to load Privacy Policy (${response.statusCode})';
+      }
+    } catch (e) {
+      debugPrint('❌ Privacy API Fetch Error: $e');
+      _errorMessage = 'Unable to connect to server. Please check your internet connection.';
     }
   }
 
@@ -189,249 +270,133 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
     }
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // 🎨 Modern App Bar with Gradient
-          SliverAppBar(
-            expandedHeight: 200,
-            floating: false,
-            pinned: true,
-            elevation: 0,
-            backgroundColor: ThemeManager.themeColorStart,
-            flexibleSpace: Container(
-              decoration: ThemeManager.getGradientDecoration(),
-              child: FlexibleSpaceBar(
-                title: const Text(
-                  'Privacy & Policy',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                centerTitle: true,
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(decoration: ThemeManager.getGradientDecoration()),
-                    Positioned(
-                      top: 60,
-                      right: -30,
-                      child: Icon(
-                        Icons.security,
-                        size: 150,
-                        color: Colors.white.withOpacity(0.1),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 20,
-                      left: -30,
-                      child: Icon(
-                        Icons.privacy_tip,
-                        size: 120,
-                        color: Colors.white.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
-
-          // 📄 Content
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                // Last Updated Badge
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: ThemeManager.getLightGradientDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: ThemeManager.themeColorStart.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.update,
-                          size: 16,
-                          color: ThemeManager.themeColorStart,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Last Updated: January 04, 2026',
-                          style: TextStyle(
-                            color: ThemeManager.themeColorStart,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        color: ThemeManager.themeColorStart,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // 🎨 Modern App Bar with Gradient
+            SliverAppBar(
+              expandedHeight: 180,
+              floating: false,
+              pinned: true,
+              elevation: 0,
+              backgroundColor: ThemeManager.themeColorStart,
+              flexibleSpace: Container(
+                decoration: ThemeManager.getGradientDecoration(),
+                child: FlexibleSpaceBar(
+                  title: const Text(
+                    'Privacy Policy',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
                     ),
                   ),
-                ),
-
-                // Introduction
-                _buildSection(
-                  icon: Icons.info_outline,
-                  title: 'Introduction',
-                  content:
-                      'Welcome to our Live Chat application. We are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and services.',
-                ),
-
-                // Information We Collect
-                _buildSection(
-                  icon: Icons.folder_open,
-                  title: 'Information We Collect',
-                  content:
-                      'We collect information that you provide directly to us, including:\n\n'
-                      '• Personal Information: Name, email address, phone number, and profile photo\n'
-                      '• Chat Messages: Text messages, images, and other content you share\n'
-                      '• Device Information: Device type, operating system, and unique device identifiers\n'
-                      '• Usage Data: How you interact with our app and services',
-                ),
-
-                // How We Use Your Information
-                _buildSection(
-                  icon: Icons.settings,
-                  title: 'How We Use Your Information',
-                  content:
-                      'We use the information we collect to:\n\n'
-                      '• Provide and maintain our chat services\n'
-                      '• Send and receive messages between users\n'
-                      '• Verify user accounts and prevent fraud\n'
-                      '• Improve and personalize your experience\n'
-                      '• Send notifications and updates\n'
-                      '• Analyze usage patterns to enhance our services',
-                ),
-
-                // Data Security
-                _buildSection(
-                  icon: Icons.security,
-                  title: 'Data Security',
-                  content:
-                      'We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. This includes:\n\n'
-                      '• Encrypted data transmission (SSL/TLS)\n'
-                      '• Secure server infrastructure\n'
-                      '• Regular security audits\n'
-                      '• Access controls and authentication\n'
-                      '• Data backup and recovery systems',
-                ),
-
-                // Information Sharing
-                _buildSection(
-                  icon: Icons.share,
-                  title: 'Information Sharing',
-                  content:
-                      'We do not sell, trade, or rent your personal information to third parties. We may share your information only in the following circumstances:\n\n'
-                      '• With your consent or at your direction\n'
-                      '• With service providers who assist in operating our app\n'
-                      '• To comply with legal obligations\n'
-                      '• To protect our rights and prevent fraud',
-                ),
-
-                // Your Rights
-                _buildSection(
-                  icon: Icons.gavel,
-                  title: 'Your Rights',
-                  content:
-                      'You have the right to:\n\n'
-                      '• Access your personal information\n'
-                      '• Correct inaccurate data\n'
-                      '• Request deletion of your data\n'
-                      '• Export your data\n'
-                      '• Opt-out of marketing communications\n'
-                      '• Withdraw consent at any time',
-                ),
-
-                // Data Retention
-                _buildSection(
-                  icon: Icons.timer,
-                  title: 'Data Retention',
-                  content:
-                      'We retain your personal information for as long as necessary to provide our services and fulfill the purposes outlined in this policy. When you delete your account, we will delete or anonymize your personal information within 30 days, except where we are required to retain it by law.',
-                ),
-
-                // Children\'s Privacy
-                _buildSection(
-                  icon: Icons.child_care,
-                  title: 'Children\'s Privacy',
-                  content:
-                      'Our service is not intended for users under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.',
-                ),
-
-                // Changes to This Policy
-                _buildSection(
-                  icon: Icons.update,
-                  title: 'Changes to This Policy',
-                  content:
-                      'We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. You are advised to review this Privacy Policy periodically for any changes.',
-                ),
-
-                // Footer
-                Container(
-                  margin: const EdgeInsets.all(24),
-                  padding: const EdgeInsets.all(20),
-                  decoration: ThemeManager.getLightGradientDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: ThemeManager.themeColorStart.withOpacity(0.2),
-                    ),
-                  ),
-                  child: Column(
+                  centerTitle: true,
+                  background: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Icon(
-                        Icons.verified_user,
-                        size: 48,
-                        color: ThemeManager.themeColorStart,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Your Privacy Matters',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: ThemeManager.themeColorStart,
+                      Container(decoration: ThemeManager.getGradientDecoration()),
+                      Positioned(
+                        top: 50,
+                        right: -20,
+                        child: Icon(
+                          Icons.security_outlined,
+                          size: 140,
+                          color: Colors.white.withOpacity(0.12),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'We are committed to protecting your data and respecting your privacy rights.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      Positioned(
+                        bottom: 10,
+                        left: -20,
+                        child: Icon(
+                          Icons.privacy_tip_outlined,
+                          size: 110,
+                          color: Colors.white.withOpacity(0.12),
+                        ),
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(height: 32),
-              ],
+              ),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
-          ),
-        ],
+
+            // 📄 Body Content
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                child: Column(
+                  children: [
+                    // Last Updated Badge if available
+                    if (_lastUpdated != null && _lastUpdated!.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: ThemeManager.getLightGradientDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: ThemeManager.themeColorStart.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.update,
+                              size: 16,
+                              color: ThemeManager.themeColorStart,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Last Updated: $_lastUpdated',
+                              style: TextStyle(
+                                color: ThemeManager.themeColorStart,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Error View with Retry Button
+                    if (_errorMessage != null && _policies.isEmpty)
+                      _buildErrorWidget(),
+
+                    // Dynamic Policies List (Loaded from Admin Panel DB)
+                    if (_policies.isNotEmpty)
+                      ..._policies.map((policy) => _buildPolicyCard(policy)),
+
+                    // Footer Banner
+                    _buildFooterWidget(),
+
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  /// 📝 Build section widgetPri
-  Widget _buildSection({
-    required IconData icon,
-    required String title,
-    required String content,
-  }) {
+  /// ❌ Error Card
+  Widget _buildErrorWidget() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -444,9 +409,52 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
         ],
       ),
       child: Column(
+        children: [
+          Icon(Icons.info_outline, size: 54, color: Colors.orange.shade400),
+          const SizedBox(height: 12),
+          Text(
+            _errorMessage ?? 'No privacy policy content available.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 15, color: Colors.black87),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            label: const Text('Try Again', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ThemeManager.themeColorStart,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 📝 Policy Card (Render Title and HTML Description from DB)
+  Widget _buildPolicyCard(PrivacyPolicyItem policy) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section Header
+          // Section Header with Title
           Container(
             padding: const EdgeInsets.all(16),
             decoration: ThemeManager.getLightGradientDecoration(
@@ -462,16 +470,16 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   decoration: BoxDecoration(
                     gradient: ThemeManager.getGradient(),
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [ThemeManager.getShadow(opacity: 0.3, blur: 8)],
+                    boxShadow: [ThemeManager.getShadow(opacity: 0.25, blur: 6)],
                   ),
-                  child: Icon(icon, color: Colors.white, size: 24),
+                  child: const Icon(Icons.description, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    title,
+                    policy.title,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                       color: ThemeManager.themeColorStart,
                     ),
@@ -481,17 +489,48 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
             ),
           ),
 
-          // Section Content
+          // Section Content (Rich HTML Text Parser)
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              content,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.6,
-                color: Colors.grey[800],
-              ),
+            padding: const EdgeInsets.all(18),
+            child: DynamicHtmlContent(htmlContent: policy.description),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🛡️ Footer Card
+  Widget _buildFooterWidget() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(20),
+      decoration: ThemeManager.getLightGradientDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: ThemeManager.themeColorStart.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.verified_user,
+            size: 44,
+            color: ThemeManager.themeColorStart,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Your Privacy Matters',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: ThemeManager.themeColorStart,
             ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'We are committed to protecting your data and respecting your privacy rights.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
           ),
         ],
       ),
@@ -499,7 +538,226 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
   }
 }
 
-// ==================== MAIN (FOR TESTING) ====================
+// ==================== DYNAMIC HTML CONTENT RENDERER ====================
+/// Clean, robust Flutter parser that converts HTML output from Summernote editor into native Flutter Widgets!
+class DynamicHtmlContent extends StatelessWidget {
+  final String htmlContent;
+
+  const DynamicHtmlContent({super.key, required this.htmlContent});
+
+  @override
+  Widget build(BuildContext context) {
+    if (htmlContent.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final blocks = _parseHtmlToBlocks(htmlContent);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: blocks.map((block) {
+        if (block.type == _BlockType.heading) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 14, bottom: 8),
+            child: Text(
+              block.text,
+              style: TextStyle(
+                fontSize: block.level == 1 ? 20 : (block.level == 2 ? 18 : 16),
+                fontWeight: FontWeight.bold,
+                color: ThemeManager.themeColorStart,
+                height: 1.3,
+              ),
+            ),
+          );
+        } else if (block.type == _BlockType.listItem) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, right: 8),
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: ThemeManager.themeColorStart,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _buildRichText(block.text),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Paragraph / Normal Block
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildRichText(block.text),
+          );
+        }
+      }).toList(),
+    );
+  }
+
+  /// Renders styled inline text (handles <b>, <strong>, <i>, <em>, <u>)
+  Widget _buildRichText(String text) {
+    final spans = _parseInlineSpans(text);
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.grey[850],
+          fontFamily: 'Roboto',
+        ),
+        children: spans,
+      ),
+    );
+  }
+
+  /// Parse raw HTML into structural blocks
+  List<_ContentBlock> _parseHtmlToBlocks(String html) {
+    String cleanHtml = html
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'");
+
+    // Replace <br> and <br/> with line break tag
+    cleanHtml = cleanHtml.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+
+    final List<_ContentBlock> blocks = [];
+
+    // Split HTML tags using regular expression
+    final RegExp tagExp = RegExp(
+      r'<(h[1-6]|p|li|ul|ol|div|blockquote)[^>]*>(.*?)</\1>|<(h[1-6]|p|li)[^>]*/>|([^<]+)',
+      caseSensitive: false,
+      dotAll: true,
+    );
+
+    final matches = tagExp.allMatches(cleanHtml);
+
+    for (final match in matches) {
+      final tag = match.group(1)?.toLowerCase();
+      final content = match.group(2) ?? match.group(4) ?? '';
+      final trimmed = content.trim();
+
+      if (trimmed.isEmpty) continue;
+
+      if (tag != null && tag.startsWith('h')) {
+        int level = int.tryParse(tag.substring(1)) ?? 2;
+        blocks.add(_ContentBlock(
+          type: _BlockType.heading,
+          text: _stripTags(trimmed),
+          level: level,
+        ));
+      } else if (tag == 'li') {
+        blocks.add(_ContentBlock(
+          type: _BlockType.listItem,
+          text: trimmed,
+        ));
+      } else {
+        // If content contains sub-tags like <li> or <p>, process lines
+        final lines = trimmed.split('\n');
+        for (var line in lines) {
+          final tLine = line.trim();
+          if (tLine.isNotEmpty) {
+            blocks.add(_ContentBlock(
+              type: _BlockType.paragraph,
+              text: tLine,
+            ));
+          }
+        }
+      }
+    }
+
+    // Fallback if regex matched nothing
+    if (blocks.isEmpty && cleanHtml.trim().isNotEmpty) {
+      final plain = _stripTags(cleanHtml);
+      for (var paragraph in plain.split('\n')) {
+        if (paragraph.trim().isNotEmpty) {
+          blocks.add(_ContentBlock(
+            type: _BlockType.paragraph,
+            text: paragraph.trim(),
+          ));
+        }
+      }
+    }
+
+    return blocks;
+  }
+
+  /// Strip remaining outer tags for titles
+  String _stripTags(String html) {
+    return html.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+  }
+
+  /// Parse inline HTML tags for RichText formatting
+  List<TextSpan> _parseInlineSpans(String text) {
+    final List<TextSpan> spans = [];
+
+    final RegExp inlineExp = RegExp(
+      r'<(b|strong|i|em|u)[^>]*>(.*?)</\1>|([^<]+)',
+      caseSensitive: false,
+      dotAll: true,
+    );
+
+    final matches = inlineExp.allMatches(text);
+
+    for (final match in matches) {
+      final tag = match.group(1)?.toLowerCase();
+      final innerContent = match.group(2) ?? match.group(3) ?? '';
+      final cleanText = _stripTags(innerContent);
+
+      if (cleanText.isEmpty) continue;
+
+      if (tag == 'b' || tag == 'strong') {
+        spans.add(TextSpan(
+          text: cleanText,
+          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+        ));
+      } else if (tag == 'i' || tag == 'em') {
+        spans.add(TextSpan(
+          text: cleanText,
+          style: const TextStyle(fontStyle: FontStyle.italic),
+        ));
+      } else if (tag == 'u') {
+        spans.add(TextSpan(
+          text: cleanText,
+          style: const TextStyle(decoration: TextDecoration.underline),
+        ));
+      } else {
+        spans.add(TextSpan(text: cleanText));
+      }
+    }
+
+    if (spans.isEmpty && text.trim().isNotEmpty) {
+      spans.add(TextSpan(text: _stripTags(text)));
+    }
+
+    return spans;
+  }
+}
+
+enum _BlockType { paragraph, heading, listItem }
+
+class _ContentBlock {
+  final _BlockType type;
+  final String text;
+  final int level;
+
+  _ContentBlock({required this.type, required this.text, this.level = 2});
+}
+
+// ==================== MAIN (FOR STANDALONE TESTING) ====================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeManager.loadThemeFromDatabase();
@@ -507,17 +765,17 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Privacy & Policy',
+      title: 'Privacy Policy',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.red,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       ),
       home: const PrivacyPolicyScreen(),
     );

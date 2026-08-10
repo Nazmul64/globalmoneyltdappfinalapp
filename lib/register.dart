@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_page.dart';
 import 'config/api_config.dart';
+import 'services/app_service.dart';
 
 // ==================== APP THEME MODEL ====================
 class AppTheme {
@@ -104,16 +105,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
-  bool _isThemeLoading = true;
-
-  // removed: final String apiUrl = ApiConfig.register;
 
   // ✅ Theme Colors
   AppTheme? _appTheme;
-  Color get primaryColor => _appTheme?.primaryColor ?? const Color(0xFFFF6347);
-  List<Color> get gradientColors =>
-      _appTheme?.gradientColors ??
-      [const Color(0xFFFF6347), const Color(0xFFFF7F5C)];
+  Color get primaryColor =>
+      _appTheme?.primaryColor ?? AppService().themeColorSync;
+  List<Color> get gradientColors {
+    final base = primaryColor;
+    return [base, Color.lerp(base, Colors.white, 0.2) ?? base];
+  }
 
   @override
   void initState() {
@@ -121,46 +121,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _loadTheme();
   }
 
-  // ✅ Load Theme from Backend
+  // ✅ Load Theme from Backend asynchronously in background
   Future<void> _loadTheme() async {
     try {
       final theme = await ThemeService.fetchTheme();
       if (mounted) {
         setState(() {
           _appTheme = theme;
-          _isThemeLoading = false;
         });
       }
     } catch (e) {
       debugPrint('❌ Theme load error: $e');
-      if (mounted) {
-        setState(() => _isThemeLoading = false);
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Show loading while theme loads
-    if (_isThemeLoading) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Color(0xFFFF6347)),
-              SizedBox(height: 16),
-              Text(
-                'Loading...',
-                style: TextStyle(fontSize: 14, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -445,18 +421,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final body = <String, String>{
+        "name": _nameController.text.trim(),
+        "email": _emailController.text.trim(),
+        "mobile": _mobileController.text.trim(),
+        "password": _passwordController.text,
+        "password_confirmation": _confirmPasswordController.text,
+      };
+
+      if (_referralCodeController.text.trim().isNotEmpty) {
+        body["ref_code"] = _referralCodeController.text.trim();
+      }
+
       var response = await http
           .post(
             Uri.parse(ApiConfig.register),
             headers: {"Accept": "application/json"},
-            body: {
-              "name": _nameController.text.trim(),
-              "email": _emailController.text.trim(),
-              "mobile": _mobileController.text.trim(),
-              "password": _passwordController.text,
-              "password_confirmation": _confirmPasswordController.text,
-              "ref_code": _referralCodeController.text.trim(),
-            },
+            body: body,
           )
           .timeout(
             const Duration(seconds: 30),
@@ -469,10 +450,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (mounted) {
         if (response.statusCode == 200 && data["success"] == true) {
-          // ✅ Save token to SharedPreferences
+          final token = data["data"]?["token"] ?? data["token"];
+          final user = data["data"]?["user"] ?? data["user"];
+
+          // ✅ Save token & complete user profile to SharedPreferences
           SharedPreferences prefs = await SharedPreferences.getInstance();
-          await prefs.setString("token", data["data"]["token"]);
-          await prefs.setString("auth_token", data["data"]["token"]);
+          await prefs.clear();
+          await prefs.setString("token", token);
+          await prefs.setString("auth_token", token);
+          await prefs.setBool('is_logged_in', true);
+
+          if (user != null) {
+            if (user["id"] != null) {
+              final userId = user["id"] is int ? user["id"] : int.parse(user["id"].toString());
+              await prefs.setInt('user_id', userId);
+            }
+            if (user["name"] != null) {
+              await prefs.setString('user_name', user["name"].toString());
+            }
+            if (user["email"] != null) {
+              await prefs.setString('user_email', user["email"].toString());
+            }
+          }
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -492,10 +491,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
             (route) => false, // Remove all previous routes
           );
         } else {
+          // Extract specific field errors if available
+          String errorMessage = data["message"] ?? "Registration failed";
+          final errorsObj = data["errors"] ?? data["data"];
+          if (errorsObj is Map) {
+            final messagesList = <String>[];
+            errorsObj.forEach((key, val) {
+              if (val is List && val.isNotEmpty) {
+                messagesList.add(val.first.toString());
+              } else if (val is String && val.isNotEmpty) {
+                messagesList.add(val);
+              }
+            });
+            if (messagesList.isNotEmpty) {
+              errorMessage = messagesList.join('\n');
+            }
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(data["message"] ?? "Registration failed"),
+              content: Text(errorMessage),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),

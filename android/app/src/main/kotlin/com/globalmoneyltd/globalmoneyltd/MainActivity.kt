@@ -243,6 +243,17 @@ class MainActivity : FlutterActivity() {
                 val prefix = if (isBreak) "⏱️ Break Time" else "📺 Watching Ad"
                 updateTimerText(prefix)
 
+                // Return to App Button Click Handlers
+                overlayView?.findViewById<View>(R.id.btnBackToApp)?.setOnClickListener {
+                    Log.d(TAG, "🔙 Back to App clicked from overlay")
+                    returnToApp()
+                }
+
+                overlayView?.findViewById<View>(R.id.btnSuccessBackToApp)?.setOnClickListener {
+                    Log.d(TAG, "🔙 Return to App clicked from success overlay")
+                    returnToApp()
+                }
+
                 // Overlay show করো
                 windowManager?.addView(overlayView, createOverlayParams())
 
@@ -406,6 +417,18 @@ class MainActivity : FlutterActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error invoking Flutter channel: ${e.message}", e)
             }
+        }
+    }
+
+    private fun returnToApp() {
+        try {
+            val intent = Intent(this@MainActivity, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            startActivity(intent)
+            Log.d(TAG, "🚀 Returned to MainActivity")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to return to app: ${e.message}", e)
         }
     }
 

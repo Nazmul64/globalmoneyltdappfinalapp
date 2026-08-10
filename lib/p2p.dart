@@ -2432,7 +2432,7 @@ class _P2PPageState extends State<P2PPage> with SingleTickerProviderStateMixin {
                                             child: Row(
                                               children: [
                                                 Expanded(
-                                                  child: Text(
+                                                  child: SelectableText(
                                                     selectedMethod.methodNumber,
                                                     style: const TextStyle(
                                                       fontSize: 16,

@@ -173,9 +173,16 @@ class _VideoTaskPageState extends State<VideoTaskPage>
     if (_isDisposing || !mounted) return;
 
     try {
-      _topBanner = await _sdk.loadBannerAd(StartAppBannerType.BANNER);
-      _bottomBanner = await _sdk.loadBannerAd(StartAppBannerType.BANNER);
-      if (mounted && !_isDisposing) setState(() {});
+      _sdk.loadBannerAd(StartAppBannerType.BANNER).then((ad) {
+        if (mounted && !_isDisposing) setState(() => _topBanner = ad);
+      }).catchError((e) {
+        debugPrint('Top banner load error: $e');
+      });
+      _sdk.loadBannerAd(StartAppBannerType.BANNER).then((ad) {
+        if (mounted && !_isDisposing) setState(() => _bottomBanner = ad);
+      }).catchError((e) {
+        debugPrint('Bottom banner load error: $e');
+      });
     } catch (e) {
       debugPrint('Banner load error: $e');
     }

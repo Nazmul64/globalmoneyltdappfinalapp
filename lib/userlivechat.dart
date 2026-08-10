@@ -11,8 +11,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'config/api_config.dart';
+import 'screens/support_live_chat_screen.dart';
 
 String get baseUrl => ApiConfig.baseUrl;
+
 String get _baseUrl => ApiConfig.baseUrl;
 
 // ==================== THEME MANAGER ====================
@@ -885,71 +887,9 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: ThemeManager.themeColorStart,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: ThemeManager.getGradientDecoration(),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            if (isMobile && selectedContact != null) {
-              setState(() => selectedContact = null);
-            } else {
-              Navigator.of(context).maybePop();
-            }
-          },
-        ),
-        title: Text(
-          isMobile && selectedContact != null
-              ? selectedContact!.name
-              : 'Friend Chat',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () async {
-              debugPrint('🔄 [UserLiveChatScreen] Manual refresh...');
-              await _loadTheme();
-              await _loadToken();
-              await _loadContacts();
-              await _loadUnreadCounts();
-            },
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-      body: _themeLoading
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      ThemeManager.themeColorStart,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Loading theme...',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            )
-          : isMobile
-          ? _buildMobileLayout()
-          : _buildDesktopLayout(),
-    );
+    return const SupportLiveChatScreen();
   }
+
 
   /// 📱 Mobile layout
   Widget _buildMobileLayout() {

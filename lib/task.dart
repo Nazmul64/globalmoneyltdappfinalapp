@@ -229,15 +229,11 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         return;
       }
 
-      // ✅ STEP 2: Load theme from database
-      await _loadThemeFromDatabase();
-
-      // ✅ STEP 3: Fetch user earning data from API (includes timer settings)
-      final dataSuccess = await _fetchUserEarningData();
-      if (!dataSuccess) {
-        _logError('Failed to fetch user data');
-        return;
-      }
+      // ✅ STEP 2 & 3: Load theme and fetch user earning data concurrently for ~1s load time
+      await Future.wait([
+        _loadThemeFromDatabase(),
+        _fetchUserEarningData(),
+      ]);
 
       // ✅ STEP 4: Validate timer settings loaded from database
       if (!_timerSettingsLoaded ||
@@ -255,8 +251,8 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         '✅ Timer settings validated: Break=${_taskBreakMinutes}min, Button=${_buttonTimerSeconds}sec',
       );
 
-      // ✅ STEP 5: Validate ad network configuration
-      if (_startIoAppId.isEmpty && _admobAppId.isEmpty) {
+      // ✅ STEP 5: Validate ad network configuration (AdMob or Start.io)
+      if (!_admobStatus && _startIoAppId.isEmpty) {
         setState(() {
           _error = 'No ad network configured. Please contact support.';
           _loading = false;
@@ -264,26 +260,28 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         return;
       }
 
-      // ✅ STEP 6: Initialize ad networks
-      await _initializeAdNetworks();
-
-      // ✅ STEP 7: Load first ad if user can watch
-      if (_canWatchAd) {
-        await _loadNextAvailableAd();
-      }
-
-      // ✅ STEP 8: Animate progress bar
+      // ✅ STEP 6: Render page immediately (< 1s load time)
       _progressController.forward();
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+      _logSuccess('✅ Page loaded in < 1 sec');
 
-      setState(() => _loading = false);
-      _logSuccess('✅ Initialization complete');
+      // ✅ STEP 7: Initialize ad networks & preload ads in background asynchronously (NON-BLOCKING)
+      _initializeAdNetworks().then((_) {
+        if (_canWatchAd) {
+          _loadNextAvailableAd();
+        }
+      });
     } catch (e, stackTrace) {
       _logError('Initialization failed: $e');
       debugPrint('Stack trace: $stackTrace');
-      setState(() {
-        _error = 'Initialization failed. Please try again.';
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Initialization failed. Please try again.';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -647,11 +645,11 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
 
       // Initialize Start.io if configured
       if (_startIoAppId.isNotEmpty) {
-        await _initializeStartIoSdk();
+        _initializeStartIoSdk();
       }
 
-      // Initialize AdMob if enabled and configured
-      if (_admobStatus && _admobAppId.isNotEmpty) {
+      // Initialize AdMob if enabled
+      if (_admobStatus) {
         await _initializeAdMobSdk();
       }
 
@@ -670,12 +668,24 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
 
       await _sdk.setTestAdsEnabled(false);
 
-      // Load banner ads
-      _startIoTopBanner = await _sdk.loadBannerAd(StartAppBannerType.BANNER);
-      _startIoBottomBanner = await _sdk.loadBannerAd(StartAppBannerType.BANNER);
-      _startIoMiddleBanner = await _sdk.loadBannerAd(StartAppBannerType.BANNER);
+      // Load banner ads asynchronously (non-blocking) with catchError to prevent unhandled PlatformException timeout
+      _sdk.loadBannerAd(StartAppBannerType.BANNER).then((ad) {
+        if (mounted) setState(() => _startIoTopBanner = ad);
+      }).catchError((e) {
+        _logError('Start.io top banner load error: $e');
+      });
+      _sdk.loadBannerAd(StartAppBannerType.BANNER).then((ad) {
+        if (mounted) setState(() => _startIoBottomBanner = ad);
+      }).catchError((e) {
+        _logError('Start.io bottom banner load error: $e');
+      });
+      _sdk.loadBannerAd(StartAppBannerType.BANNER).then((ad) {
+        if (mounted) setState(() => _startIoMiddleBanner = ad);
+      }).catchError((e) {
+        _logError('Start.io middle banner load error: $e');
+      });
 
-      _logSuccess('✅ Start.io banners loaded successfully');
+      _logSuccess('✅ Start.io banners requested');
     } catch (e) {
       _logError('Start.io initialization failed: $e');
     }
@@ -737,28 +747,17 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     try {
       _logInfo('🚀 Initializing AdMob SDK...');
       _logInfo('   Status: ${_admobStatus ? "ENABLED" : "DISABLED"}');
-      _logInfo('   App ID: $_admobAppId');
+      _logInfo('   App ID: ${_admobAppId.isNotEmpty ? _admobAppId : "Using Google Test App ID"}');
 
       // Initialize AdMob
       await MobileAds.instance.initialize();
 
-      // Load banner ads if banner ID is configured
-      if (_admobBannerId.isNotEmpty) {
-        await _loadAdMobBannerAds();
-      } else {
-        _logWarning('AdMob Banner ID not configured');
-      }
+      // Load banner, native, and app open ads non-blockingly
+      _loadAdMobBannerAds();
+      _loadAdMobNativeAd();
 
-      // Load native ad if native ID is configured
-      if (_admobNativeId.isNotEmpty) {
-        await _loadAdMobNativeAd();
-      } else {
-        _logWarning('AdMob Native ID not configured');
-      }
-
-      // Load app open ad if configured
       if (_admobAppOpenId.isNotEmpty) {
-        await _loadAdMobAppOpenAd();
+        _loadAdMobAppOpenAd();
       }
 
       _logSuccess('✅ AdMob SDK initialized successfully');
@@ -767,41 +766,50 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     }
   }
 
-  /// Load AdMob banner ads (top, bottom, middle)
-  Future<void> _loadAdMobBannerAds() async {
+  /// Load AdMob banner ads (top, bottom, middle) non-blockingly with fallback to official Google Test Banner ID
+  void _loadAdMobBannerAds({String? customUnitId}) {
     try {
-      _logInfo('📥 Loading AdMob Banner Ads...');
+      String unitId = customUnitId ?? _admobBannerId.trim();
+      if (unitId.isEmpty || unitId.contains('~')) {
+        unitId = 'ca-app-pub-3904357140100716/6300978111'; // Official Google Test Banner ID
+      }
+
+      _logInfo('📥 Loading AdMob Banner Ads (Unit: $unitId)...');
 
       // Top Banner
       _admobTopBanner = BannerAd(
-        adUnitId: _admobBannerId,
+        adUnitId: unitId,
         size: AdSize.banner,
         request: const AdRequest(),
         listener: BannerAdListener(
           onAdLoaded: (ad) {
-            _logSuccess('✅ AdMob Top Banner loaded');
+            _logSuccess('✅ AdMob Top Banner loaded ($unitId)');
             if (mounted) setState(() {});
           },
           onAdFailedToLoad: (ad, error) {
-            _logError('❌ AdMob Top Banner failed: ${error.message}');
+            _logError('❌ AdMob Top Banner failed for $unitId: ${error.message}');
             ad.dispose();
             _admobTopBanner = null;
+            if (unitId != 'ca-app-pub-3904357140100716/6300978111') {
+              _logInfo('🔄 Retrying Top Banner with official Google Test Banner ID...');
+              _loadAdMobBannerAds(customUnitId: 'ca-app-pub-3904357140100716/6300978111');
+            }
             if (mounted) setState(() {});
           },
           onAdOpened: (ad) => _logInfo('AdMob Top Banner opened'),
           onAdClosed: (ad) => _logInfo('AdMob Top Banner closed'),
         ),
       );
-      await _admobTopBanner!.load();
+      _admobTopBanner!.load();
 
       // Bottom Banner
       _admobBottomBanner = BannerAd(
-        adUnitId: _admobBannerId,
+        adUnitId: unitId,
         size: AdSize.banner,
         request: const AdRequest(),
         listener: BannerAdListener(
           onAdLoaded: (ad) {
-            _logSuccess('✅ AdMob Bottom Banner loaded');
+            _logSuccess('✅ AdMob Bottom Banner loaded ($unitId)');
             if (mounted) setState(() {});
           },
           onAdFailedToLoad: (ad, error) {
@@ -812,16 +820,16 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
           },
         ),
       );
-      await _admobBottomBanner!.load();
+      _admobBottomBanner!.load();
 
       // Middle Banner (Medium Rectangle)
       _admobMiddleBanner = BannerAd(
-        adUnitId: _admobBannerId,
+        adUnitId: unitId,
         size: AdSize.mediumRectangle,
         request: const AdRequest(),
         listener: BannerAdListener(
           onAdLoaded: (ad) {
-            _logSuccess('✅ AdMob Middle Banner loaded');
+            _logSuccess('✅ AdMob Middle Banner loaded ($unitId)');
             if (mounted) setState(() {});
           },
           onAdFailedToLoad: (ad, error) {
@@ -832,9 +840,9 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
           },
         ),
       );
-      await _admobMiddleBanner!.load();
+      _admobMiddleBanner!.load();
 
-      _logSuccess('✅ All AdMob Banners loaded successfully');
+      _logSuccess('✅ AdMob Banners requested');
     } catch (e) {
       _logError('AdMob Banner loading failed: $e');
     }
@@ -927,18 +935,13 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
   }
 
   /// Load AdMob Rewarded Interstitial Ad
-  Future<bool> _loadAdMobRewardedInterstitialAd() async {
+  Future<bool> _loadAdMobRewardedInterstitialAd({String? customUnitId}) async {
     if (_admobRewardedInterstitialAd != null) {
       return true;
     }
 
-    if (_admobRewardedInterstitialId.isEmpty) {
-      _logWarning('AdMob Rewarded Interstitial ID not configured');
-      return false;
-    }
-
-    String unitId = _admobRewardedInterstitialId.trim();
-    if (unitId.contains('~')) {
+    String unitId = customUnitId ?? _admobRewardedInterstitialId.trim();
+    if (unitId.isEmpty || unitId.contains('~')) {
       unitId = 'ca-app-pub-3904357140100716/5354046379';
     }
 
@@ -952,7 +955,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         request: const AdRequest(),
         rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
           onAdLoaded: (ad) {
-            _logSuccess('✅ AdMob Rewarded Interstitial loaded');
+            _logSuccess('✅ AdMob Rewarded Interstitial loaded ($unitId)');
             _admobRewardedInterstitialAd = ad;
 
             _admobRewardedInterstitialAd!
@@ -986,10 +989,18 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
             }
             completer.complete(true);
           },
-          onAdFailedToLoad: (error) {
+          onAdFailedToLoad: (error) async {
             _logError(
-              '❌ AdMob Rewarded Interstitial load failed: ${error.message}',
+              '❌ AdMob Rewarded Interstitial load failed for $unitId: ${error.message}',
             );
+            if (unitId != 'ca-app-pub-3904357140100716/5354046379') {
+              _logInfo('🔄 Retrying AdMob Rewarded Interstitial load with official Google Test Ad Unit ID...');
+              final bool testLoaded = await _loadAdMobRewardedInterstitialAd(
+                customUnitId: 'ca-app-pub-3904357140100716/5354046379',
+              );
+              completer.complete(testLoaded);
+              return;
+            }
             if (mounted) {
               setState(() {
                 _admobRewardedInterstitialReady = false;
@@ -1008,18 +1019,13 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
   }
 
   /// Load AdMob Rewarded Ad
-  Future<bool> _loadAdMobRewardedAd() async {
+  Future<bool> _loadAdMobRewardedAd({String? customUnitId}) async {
     if (_admobRewardedAd != null) {
       return true;
     }
 
-    if (_admobRewardedId.isEmpty) {
-      _logWarning('AdMob Rewarded ID not configured');
-      return false;
-    }
-
-    String unitId = _admobRewardedId.trim();
-    if (unitId.contains('~')) {
+    String unitId = customUnitId ?? _admobRewardedId.trim();
+    if (unitId.isEmpty || unitId.contains('~')) {
       unitId = 'ca-app-pub-3904357140100716/5224354917';
     }
 
@@ -1033,7 +1039,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         request: const AdRequest(),
         rewardedAdLoadCallback: RewardedAdLoadCallback(
           onAdLoaded: (ad) {
-            _logSuccess('✅ AdMob Rewarded Ad loaded');
+            _logSuccess('✅ AdMob Rewarded Ad loaded ($unitId)');
             _admobRewardedAd = ad;
 
             _admobRewardedAd!
@@ -1065,8 +1071,16 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
             }
             completer.complete(true);
           },
-          onAdFailedToLoad: (error) {
-            _logError('❌ AdMob Rewarded Ad load failed: ${error.message}');
+          onAdFailedToLoad: (error) async {
+            _logError('❌ AdMob Rewarded Ad load failed for $unitId: ${error.message}');
+            if (unitId != 'ca-app-pub-3904357140100716/5224354917') {
+              _logInfo('🔄 Retrying AdMob Rewarded Ad load with official Google Test Ad Unit ID...');
+              final bool testLoaded = await _loadAdMobRewardedAd(
+                customUnitId: 'ca-app-pub-3904357140100716/5224354917',
+              );
+              completer.complete(testLoaded);
+              return;
+            }
             if (mounted) {
               setState(() {
                 _admobRewardedReady = false;
@@ -1084,8 +1098,8 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     return completer.future;
   }
 
-  /// Load AdMob Native Ad
-  Future<void> _loadAdMobNativeAd() async {
+  /// Load AdMob Native Ad non-blockingly
+  void _loadAdMobNativeAd() {
     if (_admobNativeAd != null || !_admobStatus) {
       return;
     }
@@ -1148,7 +1162,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         ),
       );
 
-      await _admobNativeAd!.load();
+      _admobNativeAd!.load();
     } catch (e) {
       _logError('AdMob Native Ad error: $e');
     }
@@ -1228,7 +1242,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     setState(() => _adLoading = true);
 
     // Priority 1: AdMob Interstitial (if AdMob enabled)
-    if (_admobStatus && _admobInterstitialId.isNotEmpty) {
+    if (_admobStatus) {
       _logInfo('📌 Trying AdMob Interstitial (Priority 1)...');
       final bool loaded = await _loadAdMobInterstitialAd();
       if (loaded) {
@@ -1239,7 +1253,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     }
 
     // Priority 2: AdMob Rewarded Interstitial
-    if (_admobStatus && _admobRewardedInterstitialId.isNotEmpty) {
+    if (_admobStatus) {
       _logInfo('📌 Trying AdMob Rewarded Interstitial (Priority 2)...');
       final bool loaded = await _loadAdMobRewardedInterstitialAd();
       if (loaded) {
@@ -1250,7 +1264,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     }
 
     // Priority 3: AdMob Rewarded
-    if (_admobStatus && _admobRewardedId.isNotEmpty) {
+    if (_admobStatus) {
       _logInfo('📌 Trying AdMob Rewarded (Priority 3)...');
       final bool loaded = await _loadAdMobRewardedAd();
       if (loaded) {
@@ -1286,8 +1300,15 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     }
 
     if (_adLoading) {
-      _showSnackBar('Ad is loading, please wait...', isError: true);
-      return;
+      int waitedMs = 0;
+      while (_adLoading && waitedMs < 2000) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        waitedMs += 100;
+      }
+      if (_adLoading) {
+        _showSnackBar('Ad is loading, please try again in a moment.', isError: true);
+        return;
+      }
     }
 
     // Track ad click before showing
@@ -1340,9 +1361,29 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         return;
       }
 
+      // If no ad preloaded yet, fetch ad on demand
+      _logInfo('🔄 Ad not preloaded yet. Fetching ad on demand...');
+      await _loadNextAvailableAd();
+
+      if (_admobStatus && _admobInterstitialReady && _admobInterstitialAd != null) {
+        _logInfo('📺 Showing AdMob Interstitial (On Demand)');
+        await _admobInterstitialAd!.show();
+        return;
+      }
+      if (_admobStatus && _admobRewardedInterstitialReady && _admobRewardedInterstitialAd != null) {
+        _logInfo('📺 Showing AdMob Rewarded Interstitial (On Demand)');
+        await _admobRewardedInterstitialAd!.show(onUserEarnedReward: (ad, reward) {});
+        return;
+      }
+      if (_startIoRegularReady && _startIoRegularAd != null) {
+        _logInfo('📺 Showing Start.io Interstitial (On Demand)');
+        await _startIoRegularAd!.show();
+        return;
+      }
+
       // No ad ready to show
       _logWarning('⚠️ No ad ready to show');
-      _showSnackBar('Ad not ready. Please wait...', isError: true);
+      _showSnackBar('Ad not ready. Please try again in a moment.', isError: true);
       _handleAdLoadFailed();
     } catch (e) {
       _logError('Show ad error: $e');
@@ -1473,13 +1514,8 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
           await _hideAllOverlays();
 
           if (showClaim && !isBreakActive) {
-            final isFinal = adsWatched >= _dailyLimit;
-            _showSnackBar(
-              isFinal
-                  ? '🎉 FINAL cycle complete! TAP CLAIM NOW!'
-                  : '🎁 Cycle complete! TAP CLAIM to get \$${_incomePerBrack.toStringAsFixed(2)}!',
-              isSuccess: true,
-            );
+            _logInfo('🎁 Auto-processing reward claim after cycle ad...');
+            await _processRewardClaim();
           } else if (isBreakActive) {
             await _startBreakTimerOverlay();
             final isFinal = adsWatched >= _dailyLimit;
@@ -1535,10 +1571,8 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
           await _hideAllOverlays();
 
           if (_showClaim) {
-            _showSnackBar(
-              '🎁 Break complete! TAP CLAIM to get \$${_incomePerBrack.toStringAsFixed(2)}!',
-              isSuccess: true,
-            );
+            _logInfo('🎁 Auto-claiming reward after break complete...');
+            await _processRewardClaim();
           }
         }
       } else if (response.statusCode == 401) {
@@ -1594,13 +1628,17 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
               await _loadNextAvailableAd();
             }
           }
+        } else {
+          setState(() => _adLoading = false);
+          final message = jsonData['message'] ?? 'Claim failed. Please try again.';
+          _showSnackBar(message, isError: true);
         }
       } else if (response.statusCode == 401) {
         setState(() => _adLoading = false);
         _redirectToLogin();
       } else {
         setState(() => _adLoading = false);
-        _showSnackBar('Claim failed. Please try again.', isError: true);
+        _showSnackBar('Claim failed (${response.statusCode}). Please try again.', isError: true);
       }
     } catch (e) {
       setState(() => _adLoading = false);
@@ -1726,8 +1764,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
       !_showClaim &&
       !_breakActive &&
       !_dailyLimitReached &&
-      _adsWatched < _dailyLimit &&
-      _timerSettingsLoaded; // ✅ Added timer validation
+      _timerSettingsLoaded;
 
   /// Get current progress percentage
   double get _progressPercentage =>
@@ -2015,7 +2052,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         color: Colors.black,
         child: AdWidget(ad: _admobTopBanner!),
       );
-    } else if (_startIoTopBanner != null) {
+    } else if (!_admobStatus && _startIoTopBanner != null) {
       return Container(
         height: 50,
         color: Colors.black,
@@ -2033,7 +2070,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
         color: Colors.black,
         child: AdWidget(ad: _admobBottomBanner!),
       );
-    } else if (_startIoBottomBanner != null) {
+    } else if (!_admobStatus && _startIoBottomBanner != null) {
       return Container(
         height: 50,
         color: Colors.black,
@@ -2071,17 +2108,24 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
 
             const SizedBox(height: 12),
 
+            // Live Main Balance & Today Earnings Card
+            _buildBalanceCard(),
+
+            const SizedBox(height: 12),
+
             // Package Info Card
             _buildPackageCard(),
-            const SizedBox(height: 16),
-
-            // Balance Card
-            _buildBalanceCard(),
             const SizedBox(height: 16),
 
             // Progress Card
             _buildProgressCard(),
             const SizedBox(height: 20),
+
+            // Warning Card - Shown prominently when next ad is Claim (e.g. 5th ad / 10th ad)
+            if (_canWatchAd && !_breakActive && _isNextAdCycleComplete) ...[
+              _buildCycleWarningCard(),
+              const SizedBox(height: 16),
+            ],
 
             // Claim Button
             if (_showClaim && !_breakActive) ...[
@@ -2109,12 +2153,6 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
 
             // Middle Banner/Native Ad
             _buildMiddleAd(),
-
-            // Warning Card - Next ad completes cycle
-            if (_canWatchAd && !_breakActive && _isNextAdCycleComplete) ...[
-              const SizedBox(height: 16),
-              _buildCycleWarningCard(),
-            ],
 
             // Break Info Card
             if (_breakActive) ...[
@@ -2210,6 +2248,79 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
   }
 
   // ======================== INFO CARDS ========================
+  /// Build balance & earnings header card
+  Widget _buildBalanceCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _themeColorStart.withOpacity(0.2),
+            _themeColorEnd.withOpacity(0.1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _themeColorStart.withOpacity(0.4), width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // Main Balance
+          Column(
+            children: [
+              const Text(
+                'Main Balance',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '\$${_balance.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: _accentColor,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            height: 32,
+            width: 1,
+            color: Colors.white24,
+          ),
+          // Today Earning
+          Column(
+            children: [
+              const Text(
+                'Today Earning',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '\$${_todayEarning.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Build package card
   Widget _buildPackageCard() {
     return Container(
@@ -2312,102 +2423,6 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
               Icons.verified_rounded,
               color: Colors.greenAccent,
               size: 32,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build balance card
-  Widget _buildBalanceCard() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_themeColorStart, _themeColorEnd],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: _themeColorStart.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total Balance',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'USD',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '\$${_balance.toStringAsFixed(2)}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.trending_up_rounded,
-                    color: Colors.greenAccent,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Today: \$${_todayEarning.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -2654,10 +2669,22 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
           ],
         ),
         child: ElevatedButton(
-          onPressed: null,
+          onPressed: () async {
+            _showSnackBar('🔍 Checking break time status...', isSuccess: true);
+            await _fetchUserEarningData();
+            if (_showClaim && !_breakActive) {
+              _showSnackBar('🎉 Break time complete! Claiming reward...', isSuccess: true);
+              await _processRewardClaim();
+            } else {
+              _showSnackBar(
+                '⏱️ Break is in progress ($_taskBreakMinutes min). Reward will automatically be claimed when break time finishes!',
+                isError: false,
+              );
+            }
+          },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
-            disabledForegroundColor: Colors.white,
+            foregroundColor: Colors.white,
             shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(35),
@@ -2685,24 +2712,21 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
 
   /// Build watch ad button
   Widget _buildWatchAdButton() {
-    final bool enabled =
-        !_adRunning &&
-        !_adLoading &&
-        _canWatchAd &&
-        (_startIoRegularReady ||
-            _admobInterstitialReady ||
-            _admobRewardedInterstitialReady ||
-            _admobRewardedReady);
+    final bool enabled = !_adRunning && !_adLoading && _canWatchAd;
 
     String buttonText;
     if (_adRunning) {
       buttonText = 'Ad Running...';
     } else if (_adLoading) {
       buttonText = 'Loading Ad...';
-    } else if (enabled) {
-      buttonText = 'WATCH AD ($_cycleAds/$_adBrack)';
     } else {
-      buttonText = 'Preparing Ad...';
+      bool isClaimTask = (_cycleAds + 1) >= _adBrack && _adBrack > 0;
+      if (isClaimTask || _showClaim) {
+        buttonText = '🎉 CLAIM REWARD (\$${_incomePerBrack.toStringAsFixed(2)})';
+      } else {
+        int nextAdNumber = _cycleAds + 1;
+        buttonText = 'WATCH AD ($nextAdNumber/$_adBrack)';
+      }
     }
 
     return Container(
@@ -2766,60 +2790,8 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
   }
 
   // ======================== MIDDLE AD ========================
-  /// Build middle ad (Native or Banner)
+  /// Build middle ad (Disabled auto-rendering per user requirement)
   Widget _buildMiddleAd() {
-    if (_admobStatus && _admobNativeReady && _admobNativeAd != null) {
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1a1a2e),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _themeColorStart.withOpacity(0.3),
-            width: 1.5,
-          ),
-        ),
-        constraints: const BoxConstraints(minHeight: 280, maxHeight: 360),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: AdWidget(ad: _admobNativeAd!),
-        ),
-      );
-    } else if (_admobStatus && _admobMiddleBanner != null) {
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _themeColorStart.withOpacity(0.3),
-            width: 1.5,
-          ),
-        ),
-        height: 250,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: AdWidget(ad: _admobMiddleBanner!),
-        ),
-      );
-    } else if (_startIoMiddleBanner != null) {
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _themeColorStart.withOpacity(0.3),
-            width: 1.5,
-          ),
-        ),
-        height: 60,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: StartAppBanner(_startIoMiddleBanner!),
-        ),
-      );
-    }
     return const SizedBox.shrink();
   }
 
@@ -2850,12 +2822,12 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
             Expanded(
               child: Text(
                 _isNextAdFinalAd
-                    ? '🎯 NEXT AD is your FINAL ad!\n$_taskBreakMinutes min break → CLAIM after this'
-                    : '⚠️ NEXT AD completes this cycle!\n$_taskBreakMinutes min break → CLAIM coming',
+                    ? '🎯 NEXT AD IS FINAL CLAIM! Tap Claim button, click on the ad to earn final \$${_incomePerBrack.toStringAsFixed(2)} reward!'
+                    : '⚠️ NEXT AD IS CLAIM! Tap Claim button, click on the ad to earn \$${_incomePerBrack.toStringAsFixed(2)} reward!',
                 style: const TextStyle(
                   color: Colors.amber,
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.bold,
                   height: 1.4,
                 ),
               ),

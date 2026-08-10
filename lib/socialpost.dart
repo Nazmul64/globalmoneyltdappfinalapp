@@ -104,9 +104,13 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
         return;
       }
 
+      final url = _currentUserId != null
+          ? '${ApiConfig.baseUrl}/userphotoshow?user_id=$_currentUserId'
+          : '${ApiConfig.baseUrl}/userphotoshow';
+
       final response = await http
           .get(
-            Uri.parse('${ApiConfig.baseUrl}/userphotoshow'),
+            Uri.parse(url),
             headers: {
               'Accept': 'application/json',
               'Authorization': 'Bearer $token',
@@ -118,18 +122,11 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
         final data = json.decode(response.body);
 
         if ((data['status'] == true || data['success'] == true) && mounted) {
-          String photoUrl = '';
-
-          final userData = data['data'] ?? data;
-          if (userData is Map) {
-            photoUrl = (userData['photo'] ??
-                    userData['avatar'] ??
-                    userData['profile_photo'] ??
-                    userData['user_photo'] ??
-                    userData['image'] ??
-                    '')
-                .toString();
-          }
+          String photoUrl = (data['photo'] ??
+                  data['data']?['photo'] ??
+                  data['data']?['avatar'] ??
+                  '')
+              .toString();
 
           if (photoUrl.isNotEmpty) {
             photoUrl = ApiConfig.avatarUrl(photoUrl);
