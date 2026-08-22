@@ -381,45 +381,28 @@ class _PostCardState extends State<PostCard> {
                 // User avatar with profile image support & fallback
                 ClipOval(
                   child: (_post.user?.fullAvatarUrl != null &&
-                          _post.user!.fullAvatarUrl!.isNotEmpty)
+                          _post.user!.fullAvatarUrl!.isNotEmpty &&
+                          !_post.user!.fullAvatarUrl!.endsWith('/uploads/avator.jpg') &&
+                          !_post.user!.fullAvatarUrl!.endsWith('/avator.jpg'))
                       ? Image.network(
                           _post.user!.fullAvatarUrl!,
                           width: 40,
                           height: 40,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            print(
-                              '❌ Failed to load post user avatar: $error | URL: ${_post.user?.fullAvatarUrl}',
-                            );
-                            return Container(
+                            return Image.asset(
+                              'assets/avator.jpg',
                               width: 40,
                               height: 40,
-                              color: _themeColor.withOpacity(0.15),
-                              alignment: Alignment.center,
-                              child: Text(
-                                _post.user?.initials ?? 'U',
-                                style: TextStyle(
-                                  color: _themeColor,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              fit: BoxFit.cover,
                             );
                           },
                         )
-                      : Container(
+                      : Image.asset(
+                          'assets/avator.jpg',
                           width: 40,
                           height: 40,
-                          color: _themeColor.withOpacity(0.15),
-                          alignment: Alignment.center,
-                          child: Text(
-                            _post.user?.initials ?? 'U',
-                            style: TextStyle(
-                              color: _themeColor,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          fit: BoxFit.cover,
                         ),
                 ),
                 const SizedBox(width: 12),

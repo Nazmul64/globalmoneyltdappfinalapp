@@ -1335,88 +1335,54 @@ class ContactTile extends StatelessWidget {
     }
   }
 
-  /// 👤 🔥 Build avatar with photo from uploads/profile
+  /// 👤 🔥 Build avatar with photo from uploads/profile with default avatar fallback
   Widget _buildAvatar() {
-    debugPrint('🖼️ [ContactTile] Building avatar for ${contact.name}');
-    debugPrint('🖼️ [ContactTile] Image URL: ${contact.image}');
+    final photoUrl = contact.image != null && contact.image!.trim().isNotEmpty
+        ? ApiConfig.avatarUrl(contact.image)
+        : null;
 
-    // 🔥 If contact has image URL, show network image
-    if (contact.image != null && contact.image!.isNotEmpty) {
-      // 🔥 Check if it's not the default avatar
-      final isDefaultAvatar = contact.image!.contains('avator.jpg');
-
-      if (!isDefaultAvatar) {
-        return CircleAvatar(
-          radius: 24,
-          backgroundColor: Colors.white,
-          child: ClipOval(
-            child: Image.network(
-              contact.image!,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                debugPrint(
-                  '❌ [ContactTile] Image load error for ${contact.name}: $error',
-                );
-                return _buildInitialsAvatar();
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  debugPrint(
-                    '✅ [ContactTile] Image loaded for ${contact.name}',
-                  );
-                  return child;
-                }
-                return Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: ThemeManager.getGradient(),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    }
-
-    // 🔥 Fallback to initials avatar
-    debugPrint('🔤 [ContactTile] Using initials avatar for ${contact.name}');
-    return _buildInitialsAvatar();
-  }
-
-  /// 🔤 Initials avatar (fallback)
-  Widget _buildInitialsAvatar() {
     return Container(
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        gradient: ThemeManager.getGradient(),
+        color: Colors.white,
         shape: BoxShape.circle,
-        boxShadow: [ThemeManager.getShadow()],
+        boxShadow: [ThemeManager.getShadow(opacity: 0.15, blur: 4)],
       ),
-      child: Center(
-        child: Text(
-          contact.initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
+      child: ClipOval(
+        child: photoUrl != null &&
+                photoUrl.isNotEmpty &&
+                !photoUrl.endsWith('/uploads/avator.jpg') &&
+                !photoUrl.endsWith('/avator.jpg')
+            ? Image.network(
+                photoUrl,
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  );
+                },
+              )
+            : Image.asset(
+                'assets/avator.jpg',
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+              ),
       ),
     );
   }
@@ -2025,67 +1991,56 @@ class _ChatAreaState extends State<ChatArea> {
     }
   }
 
-  /// 👤 🔥 Contact avatar (receiver photo from uploads/profile)
+  /// 👤 🔥 Contact avatar (receiver photo from uploads/profile) with default avatar fallback
   Widget _buildContactAvatar() {
-    debugPrint(
-      '🖼️ [ChatArea Header] Building avatar for ${widget.contact.name}',
-    );
-    debugPrint('🖼️ [ChatArea Header] Photo URL: $_receiverPhoto');
+    final photoUrl = _receiverPhoto != null && _receiverPhoto!.trim().isNotEmpty
+        ? ApiConfig.avatarUrl(_receiverPhoto)
+        : (widget.contact.image != null && widget.contact.image!.trim().isNotEmpty
+            ? ApiConfig.avatarUrl(widget.contact.image)
+            : null);
 
-    if (_receiverPhoto != null && _receiverPhoto!.isNotEmpty) {
-      // Check if it's not the default avatar
-      final isDefaultAvatar = _receiverPhoto!.contains('avator.jpg');
-
-      if (!isDefaultAvatar) {
-        return CircleAvatar(
-          radius: 22,
-          backgroundColor: Colors.white,
-          child: ClipOval(
-            child: Image.network(
-              _receiverPhoto!,
-              width: 44,
-              height: 44,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                debugPrint('❌ [ChatArea Header] Receiver photo error: $error');
-                return _buildInitialsAvatar();
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  debugPrint('✅ [ChatArea Header] Photo loaded');
-                  return child;
-                }
-                return _buildInitialsAvatar();
-              },
-            ),
-          ),
-        );
-      }
-    }
-
-    debugPrint('🔤 [ChatArea Header] Using initials avatar');
-    return _buildInitialsAvatar();
-  }
-
-  /// 🔤 Initials avatar
-  Widget _buildInitialsAvatar() {
     return Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        gradient: ThemeManager.getGradient(),
+        color: Colors.white,
         shape: BoxShape.circle,
-        boxShadow: [ThemeManager.getShadow()],
+        boxShadow: [ThemeManager.getShadow(opacity: 0.15, blur: 4)],
       ),
-      child: Center(
-        child: Text(
-          widget.contact.initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
+      child: ClipOval(
+        child: photoUrl != null &&
+                photoUrl.isNotEmpty &&
+                !photoUrl.endsWith('/uploads/avator.jpg') &&
+                !photoUrl.endsWith('/avator.jpg')
+            ? Image.network(
+                photoUrl,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                  );
+                },
+              )
+            : Image.asset(
+                'assets/avator.jpg',
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+              ),
       ),
     );
   }
@@ -2506,175 +2461,108 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  /// 👤 🔥 Receiver avatar (contact photo from uploads/profile)
+  /// 👤 🔥 Receiver avatar (contact photo from uploads/profile) with default avatar fallback
   Widget _buildReceiverAvatar() {
-    debugPrint(
-      '🖼️ [MessageBubble] Building receiver avatar for ${contact.name}',
+    final photoUrl = receiverPhoto != null && receiverPhoto!.trim().isNotEmpty
+        ? ApiConfig.avatarUrl(receiverPhoto)
+        : (contact.image != null && contact.image!.trim().isNotEmpty
+            ? ApiConfig.avatarUrl(contact.image)
+            : null);
+
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [ThemeManager.getShadow(opacity: 0.15, blur: 3)],
+      ),
+      child: ClipOval(
+        child: photoUrl != null &&
+                photoUrl.isNotEmpty &&
+                !photoUrl.endsWith('/uploads/avator.jpg') &&
+                !photoUrl.endsWith('/avator.jpg')
+            ? Image.network(
+                photoUrl,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  );
+                },
+              )
+            : Image.asset(
+                'assets/avator.jpg',
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+              ),
+      ),
     );
-    debugPrint('🖼️ [MessageBubble] Receiver photo URL: $receiverPhoto');
-
-    if (receiverPhoto != null && receiverPhoto!.isNotEmpty) {
-      // Check if it's not the default avatar
-      final isDefaultAvatar = receiverPhoto!.contains('avator.jpg');
-
-      if (!isDefaultAvatar) {
-        return CircleAvatar(
-          radius: 18,
-          backgroundColor: Colors.white,
-          child: ClipOval(
-            child: Image.network(
-              receiverPhoto!,
-              width: 36,
-              height: 36,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                debugPrint(
-                  '❌ [MessageBubble] Receiver avatar load error: $error',
-                );
-                return _buildInitialsAvatar();
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  debugPrint('✅ [MessageBubble] Receiver avatar loaded');
-                  return child;
-                }
-                return Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: ThemeManager.getGradient(),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    }
-
-    debugPrint('🔤 [MessageBubble] Using initials avatar for receiver');
-    return _buildInitialsAvatar();
   }
 
-  /// 👤 🔥 Sender avatar (current user photo from uploads/profile)
+  /// 👤 🔥 Sender avatar (current user photo from uploads/profile) with default avatar fallback
   Widget _buildSenderAvatar() {
-    debugPrint('🖼️ [MessageBubble] Building sender avatar');
-    debugPrint('🖼️ [MessageBubble] Sender photo URL: $senderPhoto');
+    final photoUrl = senderPhoto != null && senderPhoto!.trim().isNotEmpty
+        ? ApiConfig.avatarUrl(senderPhoto)
+        : null;
 
-    if (senderPhoto != null && senderPhoto!.isNotEmpty) {
-      // Check if it's not the default avatar
-      final isDefaultAvatar = senderPhoto!.contains('avator.jpg');
-
-      if (!isDefaultAvatar) {
-        return CircleAvatar(
-          radius: 18,
-          backgroundColor: Colors.white,
-          child: ClipOval(
-            child: Image.network(
-              senderPhoto!,
-              width: 36,
-              height: 36,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                debugPrint(
-                  '❌ [MessageBubble] Sender avatar load error: $error',
-                );
-                return _buildSenderInitialsAvatar();
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  debugPrint('✅ [MessageBubble] Sender avatar loaded');
-                  return child;
-                }
-                return Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        ThemeManager.themeColorEnd,
-                        ThemeManager.themeColorStart,
-                      ],
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    }
-
-    debugPrint('🔤 [MessageBubble] Using initials avatar for sender');
-    return _buildSenderInitialsAvatar();
-  }
-
-  /// 🔤 Initials avatar for receiver
-  Widget _buildInitialsAvatar() {
     return Container(
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        gradient: ThemeManager.getGradient(),
+        color: Colors.white,
         shape: BoxShape.circle,
-        boxShadow: [ThemeManager.getShadow(opacity: 0.2, blur: 4)],
+        boxShadow: [ThemeManager.getShadow(opacity: 0.15, blur: 3)],
       ),
-      child: Center(
-        child: Text(
-          contact.initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 🔤 Initials avatar for sender (you/me)
-  Widget _buildSenderInitialsAvatar() {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [ThemeManager.themeColorEnd, ThemeManager.themeColorStart],
-        ),
-        shape: BoxShape.circle,
-        boxShadow: [ThemeManager.getShadow(opacity: 0.2, blur: 4)],
-      ),
-      child: const Center(
-        child: Text(
-          'Me',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
+      child: ClipOval(
+        child: photoUrl != null &&
+                photoUrl.isNotEmpty &&
+                !photoUrl.endsWith('/uploads/avator.jpg') &&
+                !photoUrl.endsWith('/avator.jpg')
+            ? Image.network(
+                photoUrl,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  );
+                },
+              )
+            : Image.asset(
+                'assets/avator.jpg',
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+              ),
       ),
     );
   }

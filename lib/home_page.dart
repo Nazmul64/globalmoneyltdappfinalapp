@@ -1616,38 +1616,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   );
                 },
                 errorBuilder: (context, error, stackTrace) {
-                  // ✅ CRITICAL: On error, show first letter instead of broken image
-                  print('⚠️ Image load error for: $photoUrl');
-                  print('⚠️ Error: $error');
-                  print('✅ Falling back to first letter display');
-
-                  return Container(
-                    color: primaryColor.withOpacity(0.1),
-                    child: Center(
-                      child: Text(
-                        firstLetter,
-                        style: TextStyle(
-                          fontSize: size * 0.4,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ),
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
                   );
                 },
               )
-            : Container(
-                color: primaryColor.withOpacity(0.1),
-                child: Center(
-                  child: Text(
-                    firstLetter,
-                    style: TextStyle(
-                      fontSize: size * 0.4,
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor,
-                    ),
-                  ),
-                ),
+            : Image.asset(
+                'assets/avator.jpg',
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
               ),
       ),
     );

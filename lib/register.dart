@@ -474,6 +474,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             if (user["email"] != null) {
               await prefs.setString('user_email', user["email"].toString());
             }
+            if (user["photo"] != null && user["photo"].toString().isNotEmpty) {
+              await prefs.setString('user_photo', user["photo"].toString());
+            }
           }
 
           ScaffoldMessenger.of(context).showSnackBar(

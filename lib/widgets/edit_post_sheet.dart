@@ -373,17 +373,31 @@ class _EditPostSheetState extends State<EditPostSheet> {
                   // User Info
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.blue[400],
-                        child: Text(
-                          widget.post.user?.initials ?? 'U',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      ClipOval(
+                        child: widget.post.user?.fullAvatarUrl != null &&
+                                widget.post.user!.fullAvatarUrl!.isNotEmpty &&
+                                !widget.post.user!.fullAvatarUrl!.endsWith('/uploads/avator.jpg') &&
+                                !widget.post.user!.fullAvatarUrl!.endsWith('/avator.jpg')
+                            ? Image.network(
+                                widget.post.user!.fullAvatarUrl!,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Image.asset(
+                                    'assets/avator.jpg',
+                                    width: 40,
+                                    height: 40,
+                                    fit: BoxFit.cover,
+                                  );
+                                },
+                              )
+                            : Image.asset(
+                                'assets/avator.jpg',
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                              ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

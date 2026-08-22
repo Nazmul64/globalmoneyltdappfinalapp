@@ -579,44 +579,19 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
         border: Border.all(color: _themeColor.withOpacity(0.3), width: 2),
       ),
       child: ClipOval(
-        child: avatarUrl.isNotEmpty
+        child: avatarUrl.isNotEmpty &&
+                !avatarUrl.endsWith('/uploads/avator.jpg') &&
+                !avatarUrl.endsWith('/avator.jpg')
             ? Image.network(
                 avatarUrl,
                 width: 44,
                 height: 44,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  print('❌ Failed to load top profile image: $error | URL: $avatarUrl');
-                  return Container(
-                    width: 44,
-                    height: 44,
-                    color: _themeColor.withOpacity(0.1),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
-                      style: TextStyle(
-                        color: _themeColor,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
+                  return Image.asset('assets/avator.jpg', fit: BoxFit.cover);
                 },
               )
-            : Container(
-                width: 44,
-                height: 44,
-                color: _themeColor.withOpacity(0.1),
-                alignment: Alignment.center,
-                child: Text(
-                  _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
-                  style: TextStyle(
-                    color: _themeColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+            : Image.asset('assets/avator.jpg', fit: BoxFit.cover),
       ),
     );
   }

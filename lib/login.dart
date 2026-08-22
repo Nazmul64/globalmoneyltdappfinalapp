@@ -591,6 +591,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userEmail != null) {
           await prefs.setString('user_email', userEmail);
         }
+        if (user["photo"] != null && user["photo"].toString().isNotEmpty) {
+          await prefs.setString('user_photo', user["photo"].toString());
+        }
 
         debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         debugPrint('✅ LOGIN SUCCESSFUL');

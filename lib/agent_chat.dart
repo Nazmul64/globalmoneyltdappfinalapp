@@ -1343,32 +1343,40 @@ class _ChatAreaState extends State<ChatArea> {
         children: [
           Stack(
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: ThemeManager.currentColor,
-                backgroundImage:
-                    (widget.agent.avatar != null &&
-                        widget.agent.avatar!.isNotEmpty)
-                    ? NetworkImage(widget.agent.avatar!)
-                    : null,
-                onBackgroundImageError:
-                    (widget.agent.avatar != null &&
-                        widget.agent.avatar!.isNotEmpty)
-                    ? (exception, stackTrace) {
-                        debugPrint('❌ Failed to load agent avatar: $exception');
-                      }
-                    : null,
-                child:
-                    (widget.agent.avatar == null ||
-                        widget.agent.avatar!.isEmpty)
-                    ? Text(
-                        widget.agent.name.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ThemeManager.currentColor, width: 1.5),
+                ),
+                child: ClipOval(
+                  child: widget.agent.avatar != null &&
+                          widget.agent.avatar!.isNotEmpty &&
+                          !widget.agent.avatar!.endsWith('/uploads/avator.jpg') &&
+                          !widget.agent.avatar!.endsWith('/avator.jpg')
+                      ? Image.network(
+                          widget.agent.avatar!,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.asset(
+                              'assets/avator.jpg',
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        )
+                      : Image.asset(
+                          'assets/avator.jpg',
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
                         ),
-                      )
-                    : null,
+                ),
               ),
               Positioned(
                 bottom: 0,
@@ -1617,51 +1625,61 @@ class _ChatAreaState extends State<ChatArea> {
 
   Widget _buildSenderAvatar(ChatMessage message) {
     final isUserMessage = message.isSentByUser;
+    final photoUrl = isUserMessage ? message.senderAvatar : widget.agent.avatar;
+    final cleanUrl = photoUrl != null && photoUrl.trim().isNotEmpty
+        ? ApiConfig.avatarUrl(photoUrl)
+        : null;
 
-    if (isUserMessage) {
-      return CircleAvatar(
-        radius: 16,
-        backgroundColor: ThemeManager.currentColor,
-        backgroundImage:
-            (message.senderAvatar != null && message.senderAvatar!.isNotEmpty)
-            ? NetworkImage(message.senderAvatar!)
-            : null,
-        onBackgroundImageError:
-            (message.senderAvatar != null && message.senderAvatar!.isNotEmpty)
-            ? (exception, stackTrace) {
-                debugPrint('❌ Failed to load user avatar: $exception');
-              }
-            : null,
-        child: (message.senderAvatar == null || message.senderAvatar!.isEmpty)
-            ? const Icon(Icons.person, size: 18, color: Colors.white)
-            : null,
-      );
-    } else {
-      return CircleAvatar(
-        radius: 16,
-        backgroundColor: ThemeManager.currentColor,
-        backgroundImage:
-            (widget.agent.avatar != null && widget.agent.avatar!.isNotEmpty)
-            ? NetworkImage(widget.agent.avatar!)
-            : null,
-        onBackgroundImageError:
-            (widget.agent.avatar != null && widget.agent.avatar!.isNotEmpty)
-            ? (exception, stackTrace) {
-                debugPrint('❌ Failed to load agent avatar: $exception');
-              }
-            : null,
-        child: (widget.agent.avatar == null || widget.agent.avatar!.isEmpty)
-            ? Text(
-                widget.agent.name.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: cleanUrl != null &&
+                cleanUrl.isNotEmpty &&
+                !cleanUrl.endsWith('/uploads/avator.jpg') &&
+                !cleanUrl.endsWith('/avator.jpg')
+            ? Image.network(
+                cleanUrl,
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 32,
+                    height: 32,
+                    fit: BoxFit.cover,
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Image.asset(
+                    'assets/avator.jpg',
+                    width: 32,
+                    height: 32,
+                    fit: BoxFit.cover,
+                  );
+                },
               )
-            : null,
-      );
-    }
+            : Image.asset(
+                'assets/avator.jpg',
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+              ),
+      ),
+    );
   }
 
   Widget _buildMessageImage(String imageUrl, bool isUserMessage) {

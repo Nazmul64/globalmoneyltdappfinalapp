@@ -840,29 +840,50 @@ class _AgentListScreenState extends State<AgentListScreen> {
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [primaryColor, primaryColorDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: Colors.white,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: primaryColor.withOpacity(0.3),
+                color: primaryColor.withOpacity(0.2),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
-          child: Center(
-            child: Text(
-              agent['name_initial'],
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
+          child: ClipOval(
+            child: agent['profile_image'] != null &&
+                    agent['profile_image'].toString().trim().isNotEmpty &&
+                    !agent['profile_image'].toString().endsWith('/uploads/avator.jpg') &&
+                    !agent['profile_image'].toString().endsWith('/avator.jpg')
+                ? Image.network(
+                    ApiConfig.avatarUrl(agent['profile_image'].toString()),
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/avator.jpg',
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Image.asset(
+                        'assets/avator.jpg',
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      );
+                    },
+                  )
+                : Image.asset(
+                    'assets/avator.jpg',
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                  ),
           ),
         ),
         const SizedBox(width: 14),

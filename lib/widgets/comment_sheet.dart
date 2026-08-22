@@ -277,35 +277,19 @@ class _CommentSheetState extends State<CommentSheet> {
                     height: 36,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return Container(
+                      return Image.asset(
+                        'assets/avator.jpg',
                         width: 36,
                         height: 36,
-                        color: Colors.blue.withOpacity(0.15),
-                        alignment: Alignment.center,
-                        child: Text(
-                          comment.user?.initials ?? 'U',
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        fit: BoxFit.cover,
                       );
                     },
                   )
-                : Container(
+                : Image.asset(
+                    'assets/avator.jpg',
                     width: 36,
                     height: 36,
-                    color: Colors.blue.withOpacity(0.15),
-                    alignment: Alignment.center,
-                    child: Text(
-                      comment.user?.initials ?? 'U',
-                      style: const TextStyle(
-                        color: Colors.blue,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    fit: BoxFit.cover,
                   ),
           ),
           const SizedBox(width: 12),

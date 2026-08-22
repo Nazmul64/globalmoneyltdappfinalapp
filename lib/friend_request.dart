@@ -83,14 +83,7 @@ class FriendRequest {
       final sender = json['sender'] as Map<String, dynamic>? ?? {};
 
       // Get photo URL from API response with fallback
-      String photoUrl = sender['photo']?.toString() ?? '';
-
-      // If empty or invalid, use default
-      if (photoUrl.isEmpty ||
-          (!photoUrl.startsWith('http://') &&
-              !photoUrl.startsWith('https://'))) {
-        photoUrl = ApiConfig.defaultAvatar;
-      }
+      String photoUrl = ApiConfig.avatarUrl(sender['photo']?.toString());
 
       return FriendRequest(
         id: _parseInt(json['id']) ?? 0,
@@ -984,42 +977,41 @@ class _RequestCard extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
+    final photoUrl = request.senderPhoto.trim();
+
     return Container(
       width: 72,
       height: 72,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.primary.withOpacity(0.3),
-            theme.light.withOpacity(0.1),
-          ],
-        ),
+        color: Colors.white,
         shape: BoxShape.circle,
         border: Border.all(color: theme.primary.withOpacity(0.3), width: 2.5),
       ),
       child: ClipOval(
-        child: Image.network(
-          request.senderPhoto,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: theme.primary,
-                value: progress.expectedTotalBytes != null
-                    ? progress.cumulativeBytesLoaded /
-                          progress.expectedTotalBytes!
-                    : null,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stack) {
-            debugPrint('❌ Image load error for ${request.senderName}: $error');
-            debugPrint('❌ Photo URL: ${request.senderPhoto}');
-            return Icon(Icons.person_rounded, size: 38, color: theme.primary);
-          },
-        ),
+        child: photoUrl.isNotEmpty &&
+                !photoUrl.endsWith('/uploads/avator.jpg') &&
+                !photoUrl.endsWith('/avator.jpg')
+            ? Image.network(
+                photoUrl,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: theme.primary,
+                      value: progress.expectedTotalBytes != null
+                          ? progress.cumulativeBytesLoaded /
+                              progress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stack) {
+                  return Image.asset('assets/avator.jpg', fit: BoxFit.cover);
+                },
+              )
+            : Image.asset('assets/avator.jpg', fit: BoxFit.cover),
       ),
     );
   }
