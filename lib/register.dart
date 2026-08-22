@@ -436,13 +436,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       var response = await http
           .post(
             Uri.parse(ApiConfig.register),
-            headers: {"Accept": "application/json"},
-            body: body,
+            headers: {
+              "Accept": "application/json",
+              "Content-Type": "application/json",
+            },
+            body: jsonEncode(body),
           )
           .timeout(
-            const Duration(seconds: 30),
+            const Duration(seconds: 45),
             onTimeout: () {
-              throw Exception('Request timeout');
+              throw Exception('Request timeout. Please check your internet connection or try again.');
             },
           );
 

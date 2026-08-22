@@ -47,6 +47,97 @@ class MainActivity : FlutterActivity() {
     // Permission
     private var permissionGranted = false
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        suppressStartAppConsentDialog()
+        super.onCreate(savedInstanceState)
+        suppressStartAppConsentDialog()
+    }
+
+    private fun suppressStartAppConsentDialog() {
+        try {
+            // 1. Pre-seed SharedPreferences for StartApp SDK to indicate consent is already handled
+            val prefNames = arrayOf(
+                "com.startapp.sdk.adsbase",
+                "com.startapp.sdk",
+                "com.startapp.sdk.ads.banner",
+                packageName + "_preferences",
+                "startapp_sdk",
+                "StartAppSDK"
+            )
+            val now = System.currentTimeMillis()
+            for (prefName in prefNames) {
+                try {
+                    val prefs = getSharedPreferences(prefName, Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .putBoolean("USER_CONSENT_PERSONALIZED_ADS_SERVING", true)
+                        .putLong("USER_CONSENT_TIMESTAMP", now)
+                        .putBoolean("startapp_consent", true)
+                        .putBoolean("startapp_consent_pas", true)
+                        .putLong("startapp_consent_timestamp", now)
+                        .putString("consent_type", "pas")
+                        .putLong("consent_timestamp", now)
+                        .putInt("consent_result", 1)
+                        .putBoolean("disable_consent_dialog", true)
+                        .putBoolean("consent_shown", true)
+                        .putBoolean("consent_dialog_shown", true)
+                        .putBoolean("com.startapp.sdk.CONSENT_SHOWN", true)
+                        .putBoolean("com.startapp.sdk.PAS_CONSENT", true)
+                        .putBoolean("com.startapp.sdk.GDPR_CONSENT", true)
+                        .putBoolean("com.startapp.sdk.CCPA_CONSENT", true)
+                        .putLong("com.startapp.sdk.CONSENT_TIMESTAMP", now)
+                        .apply()
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Invoke all StartAppSDK consent methods via reflection
+            val sdkClass = Class.forName("com.startapp.sdk.adsbase.StartAppSDK")
+            for (method in sdkClass.methods) {
+                if (method.name == "setUserConsent") {
+                    try {
+                        val types = method.parameterTypes
+                        when (types.size) {
+                            4 -> {
+                                if (types[1] == String::class.java && types[2] == Long::class.javaPrimitiveType && types[3] == Boolean::class.javaPrimitiveType) {
+                                    method.invoke(null, this, "pas", now, true)
+                                } else if (types[1] == String::class.java && types[2] == Boolean::class.javaPrimitiveType && types[3] == Long::class.javaPrimitiveType) {
+                                    method.invoke(null, this, "pas", true, now)
+                                }
+                            }
+                            3 -> {
+                                if (types[1] == Boolean::class.javaPrimitiveType && types[2] == Long::class.javaPrimitiveType) {
+                                    method.invoke(null, this, true, now)
+                                }
+                            }
+                        }
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            try {
+                val methodDisableDialog = sdkClass.getMethod("disableConsentDialog")
+                methodDisableDialog.invoke(null)
+            } catch (_: Throwable) {}
+
+            try {
+                val methodEnableReturn = sdkClass.getMethod("enableReturnAds", Boolean::class.javaPrimitiveType)
+                methodEnableReturn.invoke(null, false)
+            } catch (_: Throwable) {}
+
+            try {
+                val adClass = Class.forName("com.startapp.sdk.adsbase.StartAppAd")
+                val methodDisableSplash = adClass.getMethod("disableSplash")
+                methodDisableSplash.invoke(null)
+            } catch (_: Throwable) {}
+
+            try {
+                val initMethod = sdkClass.getMethod("init", Context::class.java, String::class.java, Boolean::class.javaPrimitiveType)
+                initMethod.invoke(null, this, "209922521", false)
+            } catch (_: Throwable) {}
+        } catch (e: Throwable) {
+            Log.d(TAG, "StartApp consent suppression info: ${e.message}")
+        }
+    }
+
     // ==================== FLUTTER SETUP ====================
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

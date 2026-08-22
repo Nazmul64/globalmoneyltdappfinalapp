@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.globalmoneyltd.globalmoneyltd"
     compileSdk = 36
-    // ndkVersion = "27.0.12077973"  // ✅ fixed NDK version
+    ndkVersion = "25.1.8937393"
 
     defaultConfig {
         applicationId = "com.globalmoneyltd.globalmoneyltd"
@@ -40,12 +40,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")  // ✅ শুধু release key (debug সরানো হয়েছে)
+            signingConfig = signingConfigs.getByName("release")  // ✅ release key
             isMinifyEnabled = false
             isShrinkResources = false
-            ndk {
-                debugSymbolLevel = "none"  // ✅ strip error fix
-            }
         }
     }
 
@@ -72,6 +69,8 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation(platform("com.google.firebase:firebase-bom:34.8.0"))
     implementation("androidx.multidex:multidex:2.0.1")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.11.0")
     implementation("com.google.firebase:firebase-analytics")
 }
 

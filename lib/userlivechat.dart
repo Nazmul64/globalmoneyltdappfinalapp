@@ -331,24 +331,9 @@ class ApiService {
           // 🔥 Load each contact with photo and verification
           for (var item in contactsData) {
             final contact = ChatContact.fromJson(item);
-
-            debugPrint(
-              '👤 [getChatList] Processing: ${contact.name} (ID: ${contact.id})',
-            );
-
-            // 🔥 Fetch user photo and verification in parallel
-            final results = await Future.wait([
-              getUserPhoto(contact.id),
-              getUserVerificationStatus(contact.id),
-            ]);
-
-            contact.image = results[0] as String;
-            contact.isVerified = results[1] as bool;
-
-            debugPrint(
-              '✅ [getChatList] ${contact.name} | Photo: ${contact.image} | Verified: ${contact.isVerified}',
-            );
-
+            if (contact.image == null || contact.image!.isEmpty || !contact.image!.startsWith('http')) {
+              contact.image = ApiConfig.defaultAvatar;
+            }
             contacts.add(contact);
           }
 
@@ -658,8 +643,8 @@ class ChatContact {
       id: _parseInt(json['id']),
       name: json['name']?.toString() ?? 'Unknown User',
       email: json['email']?.toString() ?? '',
-      image: null, // Will be loaded separately
-      isVerified: false, // Will be loaded separately
+      image: json['photo']?.toString() ?? json['image']?.toString(),
+      isVerified: json['is_verified'] == true,
     );
   }
 
@@ -887,7 +872,13 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const SupportLiveChatScreen();
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
+    return Scaffold(
+      body: SafeArea(
+        child: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
+      ),
+    );
   }
 
 
@@ -941,11 +932,19 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 16.0),
             child: Row(
               children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
@@ -954,12 +953,12 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
                   child: Icon(
                     Icons.chat,
                     color: ThemeManager.themeColorStart,
-                    size: 24,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 const Text(
-                  'Messages',
+                  'Friend Chat', 
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -1814,8 +1813,8 @@ class _ChatAreaState extends State<ChatArea> {
 
     return Column(
       children: [
-        // Desktop header with receiver photo
-        if (!isMobile) _buildDesktopHeader(),
+        // Header for Mobile and Desktop
+        if (isMobile) _buildMobileHeader() else _buildDesktopHeader(),
 
         // Messages with sender/receiver photos
         Expanded(child: _buildMessagesArea()),
@@ -1830,6 +1829,84 @@ class _ChatAreaState extends State<ChatArea> {
   }
 
   /// 🖥️ Desktop header with receiver photo
+  /// Mobile header with receiver info and back button
+  Widget _buildMobileHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        gradient: ThemeManager.getGradient(),
+        boxShadow: [ThemeManager.getShadow(opacity: 0.15, blur: 8)],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            onPressed: widget.onBack,
+          ),
+          Stack(
+            children: [
+              _buildContactAvatar(),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        widget.contact.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildVerificationBadge(),
+                  ],
+                ),
+                const Text(
+                  'Online',
+                  style: TextStyle(fontSize: 11, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
+            onPressed: _loadMessages,
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Desktop header with receiver photo
   Widget _buildDesktopHeader() {
     return Container(
       padding: const EdgeInsets.all(16),

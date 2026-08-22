@@ -49,45 +49,38 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
   }
 
   Future<void> _loadConversation({bool silent = false}) async {
-    if (!silent) {
+    if (!silent && mounted) {
       setState(() => _isLoading = true);
     }
 
     try {
       final token = await AuthService().getToken();
-      if (token == null) return;
+      if (token == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
+      // Try admin chat fetch endpoint first
       final response = await http.get(
-        Uri.parse(ApiConfig.v1SupportConvo),
+        Uri.parse(ApiConfig.adminChatFetch),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && mounted) {
-          final msgs = data['messages'] ?? [];
-          final status = data['license_status'] ?? 'inactive';
+          final msgs = data['data'] != null && data['data']['messages'] != null
+              ? data['data']['messages'] as List
+              : (data['messages'] ?? []);
+          final status = data['license_status'] ?? 'active';
 
           String? assignedKey;
           if (data['assigned_license'] != null && data['assigned_license']['license_key'] != null) {
             assignedKey = data['assigned_license']['license_key'];
-          }
-
-          // Also check messages for license keys or preset cards
-          for (var m in msgs) {
-            final msgText = m['message']?.toString() ?? '';
-            if (m['license_key'] != null && m['license_key'].toString().isNotEmpty) {
-              assignedKey = m['license_key'].toString();
-            } else if (msgText.contains('[LICENSE_CARD:')) {
-              final match = RegExp(r'key=([a-zA-Z0-9_\-]+)').firstMatch(msgText);
-              if (match != null && match.group(1) != null) {
-                assignedKey = match.group(1);
-              }
-            }
           }
 
           setState(() {
@@ -98,15 +91,39 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
           });
 
           if (!silent) _scrollToBottom();
+          return;
+        }
+      }
+
+      // Fallback to v1 support conversation if available
+      final v1Response = await http.get(
+        Uri.parse(ApiConfig.v1SupportConvo),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 5));
+
+      if (v1Response.statusCode == 200) {
+        final data = jsonDecode(v1Response.body);
+        if (data['success'] == true && mounted) {
+          setState(() {
+            _messages = data['messages'] ?? [];
+            _licenseStatus = data['license_status'] ?? 'active';
+            _isLoading = false;
+          });
+          if (!silent) _scrollToBottom();
         }
       }
     } catch (e) {
-      if (!silent && mounted) {
+      debugPrint('Error loading support conversation: $e');
+    } finally {
+      if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
-
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
@@ -118,23 +135,38 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
     try {
       final token = await AuthService().getToken();
       final response = await http.post(
-        Uri.parse(ApiConfig.v1SupportMessages),
+        Uri.parse(ApiConfig.adminChatSend),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'message': text}),
+        body: jsonEncode({'message': text, 'message_type': 'text'}),
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await _loadConversation(silent: true);
+        _scrollToBottom();
+      } else {
+        // Fallback to v1 endpoint
+        await http.post(
+          Uri.parse(ApiConfig.v1SupportMessages),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'message': text}),
+        );
         await _loadConversation(silent: true);
         _scrollToBottom();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send message. Check internet connection.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to send message. Check internet connection.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -149,34 +181,39 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
       setState(() => _isSending = true);
 
       final token = await AuthService().getToken();
-      final request = http.MultipartRequest('POST', Uri.parse(ApiConfig.v1SupportMessages));
+      final request = http.MultipartRequest('POST', Uri.parse(ApiConfig.adminChatSend));
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
+        request.headers['Accept'] = 'application/json';
       }
-      request.files.add(await http.MultipartFile.fromPath('file', pickedFile.path));
+      request.fields['message_type'] = 'image';
+      request.files.add(await http.MultipartFile.fromPath('image', pickedFile.path));
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         await _loadConversation(silent: true);
         _scrollToBottom();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to upload image.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload image.')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error uploading image: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading image: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
 
   Future<void> _activateLicense(String key) async {
-
     if (_isActivating) return;
 
     setState(() => _isActivating = true);
@@ -249,19 +286,7 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Live Support Chat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(
-              'License Status: ${_licenseStatus.toUpperCase()}',
-              style: TextStyle(
-                fontSize: 12,
-                color: _licenseStatus.toLowerCase() == 'active' ? Colors.greenAccent : Colors.amberAccent,
-              ),
-            ),
-          ],
-        ),
+        title: const Text('Live Support Chat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -398,7 +423,7 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
                                   ],
                                 ),
                                 child: Column(
-                                  crossAxisAlignment: isUser ? CrossAlignment.end : CrossAlignment.start,
+                                  crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       msg['sender_name'] ?? (isUser ? 'You' : 'Admin'),
@@ -414,11 +439,13 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
                                         padding: const EdgeInsets.only(bottom: 6),
                                         child: ClipRRect(
                                           borderRadius: BorderRadius.circular(10),
-                                          child: Image.network(
-                                            ApiConfig.mediaUrl(msg['attachment_path'].toString()),
-                                            fit: BoxFit.cover,
-                                            maxHeight: 200,
-                                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(maxHeight: 200),
+                                            child: Image.network(
+                                              ApiConfig.mediaUrl(msg['attachment_path'].toString()),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                                            ),
                                           ),
                                         ),
                                       ),

@@ -21,7 +21,7 @@
          📱 APPLICATION
          ==================================================================== -->
     <application
-        android:name="${applicationName}"
+        android:name=".MainApplication"
         android:label="Global Money Ltd"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
@@ -36,7 +36,31 @@
 
         <meta-data
             android:name="com.startapp.sdk.ENABLE_RETURN_ADS"
+            android:value="false" />
+
+        <meta-data
+            android:name="com.startapp.sdk.RETURN_ADS_ENABLED"
+            android:value="false" />
+
+        <meta-data
+            android:name="com.startapp.sdk.SPLASH_AD_ENABLED"
+            android:value="false" />
+
+        <meta-data
+            android:name="com.startapp.sdk.DISABLE_CONSENT_DIALOG"
             android:value="true" />
+
+        <meta-data
+            android:name="com.startapp.sdk.CONSENT_DIALOG"
+            android:value="false" />
+
+        <meta-data
+            android:name="com.startapp.sdk.AUTO"
+            android:value="false" />
+
+        <meta-data
+            android:name="com.startapp.sdk.INITIALIZE_ON_STARTUP"
+            android:value="false" />
 
         <!-- ====================================================================
              📢 GOOGLE ADMOB

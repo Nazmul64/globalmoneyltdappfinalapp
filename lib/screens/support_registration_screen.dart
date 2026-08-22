@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
-import '../userlivechat.dart';
+import 'support_live_chat_screen.dart';
 
 class SupportRegistrationScreen extends StatefulWidget {
   const SupportRegistrationScreen({super.key});
@@ -52,7 +52,7 @@ class _SupportRegistrationScreenState extends State<SupportRegistrationScreen> {
       // Navigate to Support Live Chat
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const SupportLiveChatPage()),
+        MaterialPageRoute(builder: (context) => const SupportLiveChatScreen()),
       );
     } else {
       HapticFeedback.vibrate();

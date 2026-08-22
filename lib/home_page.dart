@@ -1766,7 +1766,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 MaterialPageRoute(builder: (_) => const TaskPage()),
               );
               if (mounted) {
-                fetchData();
+                _fetchUserDataInBackground();
+                _fetchWorkNoticesInBackground();
               }
             },
             style: ElevatedButton.styleFrom(
@@ -3206,11 +3207,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     IconData buttonIcon = Icons.person_add;
     VoidCallback? onPressed;
 
-    if (friendStatus == 'friend') {
-      buttonText = 'Friends';
+    if (friendStatus == 'friend' || friendStatus == 'accepted') {
+      buttonText = 'Message';
       buttonColor = Colors.green;
-      buttonIcon = Icons.check_circle;
-      onPressed = null;
+      buttonIcon = Icons.chat;
+      onPressed = () {
+        setState(() => _showSearchResults = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const UserLiveChatScreen()),
+        );
+      };
     } else if (friendStatus == 'pending' && requestSentByMe) {
       buttonText = 'Cancel';
       buttonColor = Colors.orange;
@@ -3618,9 +3625,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Navigator.pop(context);
               final Uri url = Uri.parse(ApiConfig.agentLoginUrl);
               try {
-                await launchUrl(url, mode: LaunchMode.externalApplication);
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.inAppBrowserView);
+                } else {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
               } catch (e) {
-                debugPrint('URL launch error: $e');
+                try {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                } catch (err) {
+                  debugPrint('URL launch error: $err');
+                }
               }
             },
           ),
@@ -3643,17 +3658,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => TermsAndConditionsScreen()),
-              );
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.verified_user_rounded, color: primaryColor),
-            title: const Text("Google Ads Approval"),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const GoogleAdsApprovalScreen()),
               );
             },
           ),

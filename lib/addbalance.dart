@@ -2129,7 +2129,10 @@ class _AddBalancePageState extends State<AddBalancePage>
               ),
             ],
           ),
-          if (selectedPaymentMethod!['usd_rate'] != null || selectedPaymentMethod!['usd_rate_bdt'] != null) ...[
+          if ((selectedPaymentMethod!['is_exchange_rate_active'] == true ||
+               selectedPaymentMethod!['is_exchange_rate_active'] == 1 ||
+               selectedPaymentMethod!['is_exchange_rate_active'] == '1') &&
+              (selectedPaymentMethod!['usd_rate'] != null || selectedPaymentMethod!['usd_rate_bdt'] != null)) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2340,7 +2343,12 @@ class _AddBalancePageState extends State<AddBalancePage>
                 final enteredAmount = double.tryParse(text) ?? 0;
 
                 double? rate;
-                if (selectedPaymentMethod != null) {
+                final bool isRateActive = selectedPaymentMethod != null &&
+                    (selectedPaymentMethod!['is_exchange_rate_active'] == true ||
+                     selectedPaymentMethod!['is_exchange_rate_active'] == 1 ||
+                     selectedPaymentMethod!['is_exchange_rate_active'] == '1');
+
+                if (isRateActive) {
                   if (selectedPaymentMethod!['usd_rate_bdt'] != null) {
                     rate = double.tryParse(selectedPaymentMethod!['usd_rate_bdt'].toString());
                   } else if (selectedPaymentMethod!['usd_rate'] != null) {
