@@ -17,7 +17,7 @@ class ApiConfig {
   /// ⚙️ LOCAL TESTING TOGGLE:
   /// - Set [isLocalMode] = `true` to test on your local machine / server.
   /// - Set [isLocalMode] = `false` to switch back to live production site (https://globalmoney.ltd).
-  static const bool isLocalMode = true;
+  static const bool isLocalMode = false;
 
   /// 🖥️ LOCAL SERVER URL:
   /// - Real Phone / Wi-Fi Network: 'http://192.168.0.101:8000'
