@@ -1116,7 +1116,7 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Welcome to Live Chat',
+            'Welcome to Friend Chat',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -1125,7 +1125,7 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Select a contact to start messaging',
+            'Select a friend to start messaging',
             style: TextStyle(fontSize: 16, color: Colors.grey[500]),
           ),
           const SizedBox(height: 16),

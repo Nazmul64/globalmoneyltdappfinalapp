@@ -2395,16 +2395,33 @@ class _AddBalancePageState extends State<AddBalancePage>
             ),
             const SizedBox(height: 20),
 
-            // Sender Account Field
-            _buildFormField(
-              'Your Account Number',
-              _accountController,
-              'Enter your account number',
-              TextInputType.number,
-              Icons.account_balance_wallet,
-              helperText: 'The account you sent money from',
+            // Sender Account Field (Shown only if is_account_number_active is true/enabled)
+            Builder(
+              builder: (context) {
+                final isAccountActive = selectedPaymentMethod?['is_account_number_active'] == null ||
+                    selectedPaymentMethod?['is_account_number_active'] == true ||
+                    selectedPaymentMethod?['is_account_number_active'] == 1 ||
+                    selectedPaymentMethod?['is_account_number_active'] == '1';
+
+                if (!isAccountActive) {
+                  return const SizedBox.shrink();
+                }
+
+                return Column(
+                  children: [
+                    _buildFormField(
+                      'Your Account Number',
+                      _accountController,
+                      'Enter your account number',
+                      TextInputType.number,
+                      Icons.account_balance_wallet,
+                      helperText: 'The account you sent money from',
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                );
+              },
             ),
-            const SizedBox(height: 20),
 
             // 🆕 Transaction ID Field with Duplicate Check
             _buildTransactionIdField(),
