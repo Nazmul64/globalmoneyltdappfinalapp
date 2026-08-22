@@ -2961,14 +2961,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: _toggleChat,
           ),
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: Colors.white,
-            child: Text(
-              'A',
-              style: TextStyle(
-                color: primaryColor,
-                fontWeight: FontWeight.bold,
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/avator.jpg',
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
               ),
             ),
           ),
@@ -4175,14 +4180,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (isAdmin)
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: primaryColor,
-                            child: const Text(
-                              'A',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/avator.jpg',
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
                               ),
                             ),
                           ),
