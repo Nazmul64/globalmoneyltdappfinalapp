@@ -4,6 +4,7 @@
 // ==========================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
@@ -629,6 +630,9 @@ class ChatContact {
   final String email;
   String? image; // 🔥 Populated from /chat-profile-user API
   bool isVerified;
+  String? lastMessage;
+  String? lastMessageTime;
+  DateTime? lastActivity;
 
   ChatContact({
     required this.id,
@@ -636,15 +640,43 @@ class ChatContact {
     required this.email,
     this.image,
     this.isVerified = false,
+    this.lastMessage,
+    this.lastMessageTime,
+    this.lastActivity,
   });
 
   factory ChatContact.fromJson(Map<String, dynamic> json) {
+    String? lastMsg = json['last_message']?.toString() ??
+        json['last_sms']?.toString() ??
+        json['latest_message']?.toString() ??
+        json['message']?.toString();
+
+    if (lastMsg == null && json['latest_message'] is Map) {
+      lastMsg = json['latest_message']['message']?.toString();
+    }
+    if (lastMsg == null && json['last_message'] is Map) {
+      lastMsg = json['last_message']['message']?.toString();
+    }
+
+    final timeStr = json['last_message_time']?.toString() ??
+        json['updated_at']?.toString() ??
+        json['created_at']?.toString() ??
+        json['last_activity']?.toString();
+
+    DateTime? activityDate;
+    if (timeStr != null && timeStr.isNotEmpty) {
+      activityDate = DateTime.tryParse(timeStr);
+    }
+
     return ChatContact(
       id: _parseInt(json['id']),
       name: json['name']?.toString() ?? 'Unknown User',
       email: json['email']?.toString() ?? '',
       image: json['photo']?.toString() ?? json['image']?.toString(),
-      isVerified: json['is_verified'] == true,
+      isVerified: json['is_verified'] == true || json['is_verified'] == 1,
+      lastMessage: lastMsg,
+      lastMessageTime: timeStr,
+      lastActivity: activityDate,
     );
   }
 
@@ -803,14 +835,53 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
     }
   }
 
-  /// ⏱️ Auto refresh
+  /// ⏱️ Auto refresh every 5 seconds
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
-        debugPrint('🔄 [UserLiveChatScreen] Auto-refreshing unread counts...');
+        debugPrint('🔄 [UserLiveChatScreen] 5s auto-refreshing contacts & unread...');
+        _loadContactsQuietly();
         _loadUnreadCounts();
       }
+    });
+  }
+
+  /// 🔔 Play notification sound and haptic feedback on new message
+  void _playNotificationSound() {
+    try {
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      debugPrint('Error playing notification sound: $e');
+    }
+  }
+
+  /// 🔝 Sort contacts: contact with latest message / unread text comes to top
+  void _sortContacts() {
+    contacts.sort((a, b) {
+      // 1. Prioritize unread messages
+      final unreadA = unreadCounts[a.id] ?? 0;
+      final unreadB = unreadCounts[b.id] ?? 0;
+      if (unreadA != unreadB) {
+        return unreadB.compareTo(unreadA);
+      }
+
+      // 2. Prioritize by latest message timestamp / activity date
+      if (a.lastActivity != null && b.lastActivity != null) {
+        return b.lastActivity!.compareTo(a.lastActivity!);
+      }
+      if (a.lastActivity != null) return -1;
+      if (b.lastActivity != null) return 1;
+
+      // 3. Prioritize contacts that have a last message over empty conversations
+      final hasMsgA = (a.lastMessage != null && a.lastMessage!.isNotEmpty) ? 1 : 0;
+      final hasMsgB = (b.lastMessage != null && b.lastMessage!.isNotEmpty) ? 1 : 0;
+      if (hasMsgA != hasMsgB) {
+        return hasMsgB.compareTo(hasMsgA);
+      }
+
+      return 0;
     });
   }
 
@@ -831,23 +902,53 @@ class _UserLiveChatScreenState extends State<UserLiveChatScreen> {
         isLoading = false;
         if (response.success) {
           contacts = response.data ?? [];
+          _sortContacts();
           errorMessage = null;
           debugPrint(
             '✅ [UserLiveChatScreen] ${contacts.length} contacts loaded',
           );
-
-          // 🔥 Log photo URLs for debugging
-          for (var contact in contacts) {
-            debugPrint(
-              '📷 [UserLiveChatScreen] ${contact.name}: ${contact.image} | Verified: ${contact.isVerified}',
-            );
-          }
         } else {
           errorMessage = response.error;
           contacts = [];
           debugPrint('❌ [UserLiveChatScreen] Error: $errorMessage');
         }
       });
+    }
+  }
+
+  /// 🔄 Quietly refresh contacts in background every 5 seconds without showing spinner
+  Future<void> _loadContactsQuietly() async {
+    try {
+      final response = await ApiService.getChatList();
+      if (mounted && response.success && response.data != null) {
+        final newContacts = response.data!;
+        
+        bool hasNewIncoming = false;
+        for (var newC in newContacts) {
+          final oldC = contacts.firstWhere(
+            (c) => c.id == newC.id,
+            orElse: () => ChatContact(id: -1, name: '', email: ''),
+          );
+          if (oldC.id != -1) {
+            if (newC.lastMessage != null &&
+                newC.lastMessage!.isNotEmpty &&
+                newC.lastMessage != oldC.lastMessage) {
+              hasNewIncoming = true;
+            }
+          }
+        }
+
+        setState(() {
+          contacts = newContacts;
+          _sortContacts();
+        });
+
+        if (hasNewIncoming) {
+          _playNotificationSound();
+        }
+      }
+    } catch (e) {
+      debugPrint('Quiet contact refresh error: $e');
     }
   }
 
@@ -1241,7 +1342,7 @@ class ContactTile extends StatelessWidget {
                             contact.name,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -1252,6 +1353,23 @@ class ContactTile extends StatelessWidget {
                         // 🔥 Verification badge
                         _buildVerificationBadge(),
                       ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      contact.lastMessage != null && contact.lastMessage!.trim().isNotEmpty
+                          ? contact.lastMessage!.trim()
+                          : 'Tap to start chat',
+                      style: TextStyle(
+                        color: unreadCount > 0
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.75),
+                        fontSize: 12,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -1596,6 +1714,12 @@ class _ChatAreaState extends State<ChatArea> {
       final newMessages = response.data ?? [];
 
       if (newMessages.length != messages.length) {
+        if (newMessages.isNotEmpty && !newMessages.last.isSent) {
+          try {
+            SystemSound.play(SystemSoundType.alert);
+            HapticFeedback.lightImpact();
+          } catch (_) {}
+        }
         setState(() => messages = newMessages);
         _scrollToBottom();
       }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
 
@@ -26,12 +27,31 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
   String? _assignedLicenseKey;
   String _licenseStatus = 'inactive';
   Timer? _pollingTimer;
+  String? _userPhoto;
+  String? _adminPhoto;
 
   @override
   void initState() {
     super.initState();
+    _loadUserProfile();
     _loadConversation();
     _startPolling();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final photo = prefs.getString('profile_photo') ??
+          prefs.getString('photo') ??
+          prefs.getString('user_photo') ??
+          prefs.getString('avatar') ??
+          prefs.getString('image');
+      if (mounted && photo != null && photo.isNotEmpty) {
+        setState(() => _userPhoto = photo);
+      }
+    } catch (e) {
+      debugPrint('Error loading user profile photo: $e');
+    }
   }
 
   @override
@@ -400,65 +420,93 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
                               return _buildLicenseCardMessage(msg['message'] ?? '', key);
                             }
 
-                            return Align(
-                              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                                decoration: BoxDecoration(
-                                  color: isUser ? primaryColor : Colors.white,
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(16),
-                                    topRight: const Radius.circular(16),
-                                    bottomLeft: Radius.circular(isUser ? 16 : 4),
-                                    bottomRight: Radius.circular(isUser ? 4 : 16),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
+                            final senderName = msg['sender_name'] ?? (isUser ? 'You' : 'Admin');
+                            final photo = isUser
+                                ? (msg['user_photo'] ?? msg['user_avatar'] ?? msg['sender_photo'] ?? _userPhoto)
+                                : (msg['admin_photo'] ?? msg['admin_avatar'] ?? _adminPhoto ?? ApiConfig.defaultAvatar);
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (!isUser) ...[
+                                    _buildAvatar(
+                                      imageUrl: photo?.toString(),
+                                      isUser: false,
+                                      name: senderName.toString(),
                                     ),
+                                    const SizedBox(width: 8),
                                   ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      msg['sender_name'] ?? (isUser ? 'You' : 'Admin'),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: isUser ? Colors.white70 : Colors.grey[600],
+                                  Flexible(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+                                      decoration: BoxDecoration(
+                                        color: isUser ? primaryColor : Colors.white,
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: const Radius.circular(16),
+                                          topRight: const Radius.circular(16),
+                                          bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                          bottomRight: Radius.circular(isUser ? 4 : 16),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.04),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    if (msg['attachment_path'] != null && msg['attachment_path'].toString().isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 6),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(10),
-                                          child: ConstrainedBox(
-                                            constraints: const BoxConstraints(maxHeight: 200),
-                                            child: Image.network(
-                                              ApiConfig.mediaUrl(msg['attachment_path'].toString()),
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                                      child: Column(
+                                        crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            senderName.toString(),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: isUser ? Colors.white70 : Colors.grey[600],
                                             ),
                                           ),
-                                        ),
+                                          const SizedBox(height: 4),
+                                          if (msg['attachment_path'] != null && msg['attachment_path'].toString().isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(bottom: 6),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(10),
+                                                child: ConstrainedBox(
+                                                  constraints: const BoxConstraints(maxHeight: 200),
+                                                  child: Image.network(
+                                                    ApiConfig.mediaUrl(msg['attachment_path'].toString()),
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (msg['message'] != null && msg['message'].toString().isNotEmpty)
+                                            Text(
+                                              msg['message'] ?? '',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: isUser ? Colors.white : const Color(0xFF1E293B),
+                                              ),
+                                            ),
+                                        ],
                                       ),
-                                    if (msg['message'] != null && msg['message'].toString().isNotEmpty)
-                                      Text(
-                                        msg['message'] ?? '',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isUser ? Colors.white : const Color(0xFF1E293B),
-                                        ),
-                                      ),
+                                    ),
+                                  ),
+                                  if (isUser) ...[
+                                    const SizedBox(width: 8),
+                                    _buildAvatar(
+                                      imageUrl: photo?.toString(),
+                                      isUser: true,
+                                      name: senderName.toString(),
+                                    ),
                                   ],
-                                ),
+                                ],
                               ),
                             );
                           },
@@ -548,6 +596,80 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar({
+    required String? imageUrl,
+    required bool isUser,
+    required String name,
+  }) {
+    String? resolvedUrl;
+    if (imageUrl != null && imageUrl.trim().isNotEmpty) {
+      if (imageUrl.startsWith('http')) {
+        resolvedUrl = imageUrl;
+      } else {
+        resolvedUrl = ApiConfig.avatarUrl(imageUrl);
+      }
+    }
+
+    final hasValidNetworkPhoto = resolvedUrl != null &&
+        resolvedUrl.isNotEmpty &&
+        !resolvedUrl.endsWith('/uploads/avator.jpg') &&
+        !resolvedUrl.endsWith('/avator.jpg');
+
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isUser ? primaryColor.withOpacity(0.5) : const Color(0xFF2563EB).withOpacity(0.5),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: hasValidNetworkPhoto
+            ? Image.network(
+                resolvedUrl,
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallbackAvatar(isUser, name),
+                loadingBuilder: (_, child, progress) =>
+                    progress == null ? child : _fallbackAvatar(isUser, name),
+              )
+            : _fallbackAvatar(isUser, name),
+      ),
+    );
+  }
+
+  Widget _fallbackAvatar(bool isUser, String name) {
+    if (!isUser) {
+      return Container(
+        color: const Color(0xFF2563EB),
+        alignment: Alignment.center,
+        child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 18),
+      );
+    }
+    return Container(
+      color: primaryColor,
+      alignment: Alignment.center,
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : 'U',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
       ),
     );
   }

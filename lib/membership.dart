@@ -205,6 +205,7 @@ class PackageImage extends StatelessWidget {
   final double height;
   final double? width;
   final BorderRadius? borderRadius;
+  final BoxFit fit;
 
   const PackageImage({
     Key? key,
@@ -212,6 +213,7 @@ class PackageImage extends StatelessWidget {
     this.height = 100,
     this.width,
     this.borderRadius,
+    this.fit = BoxFit.contain,
   }) : super(key: key);
 
   @override
@@ -225,7 +227,7 @@ class PackageImage extends StatelessWidget {
         imageUrl!,
         height: height,
         width: width ?? double.infinity,
-        fit: BoxFit.cover,
+        fit: fit,
         loadingBuilder: (_, child, progress) =>
             progress == null ? child : _loading(br),
         errorBuilder: (_, __, ___) => _placeholder(br),
@@ -358,130 +360,138 @@ class PackageCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (photoUrl != null && photoUrl.isNotEmpty)
-                ClipRRect(
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
-                  ),
-                  child: Stack(
-                    children: [
-                      PackageImage(
-                        imageUrl: photoUrl,
-                        height: imageHeight,
-                        width: double.infinity,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      if (isCurrent)
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.activeGreen,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.verified_rounded,
-                                  size: 10,
-                                  color: Colors.white,
-                                ),
-                                SizedBox(width: 2),
-                                Text(
-                                  "ACTIVE",
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PackageImage(
+                            imageUrl: photoUrl,
+                            height: imageHeight,
+                            width: double.infinity,
+                            fit: BoxFit.contain,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        ),
-                    ],
+                          if (isCurrent)
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.activeGreen,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(
+                                      Icons.verified_rounded,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(width: 2),
+                                    Text(
+                                      "ACTIVE",
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isCurrent &&
-                          (photoUrl == null || photoUrl.isEmpty)) ...[
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.activeGreen,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.verified_rounded,
-                                size: 10,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 2),
-                              Text(
-                                "ACTIVE",
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                      ],
-                      Text(
-                        package.name,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: 5),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isCurrent &&
+                        (photoUrl == null || photoUrl.isEmpty)) ...[
                       Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(8),
+                          color: AppTheme.activeGreen,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          "\$${package.price.toStringAsFixed(2)}",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(
+                              Icons.verified_rounded,
+                              size: 10,
+                              color: Colors.white,
+                            ),
+                            SizedBox(width: 2),
+                            Text(
+                              "ACTIVE",
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Spacer(),
-                      PackageDetailRow(
-                        icon: Icons.trending_up_rounded,
-                        label: "Daily Earn",
-                        value: "\$${package.dailyIncome.toStringAsFixed(2)}",
+                      const SizedBox(height: 4),
+                    ],
+                    Text(
+                      package.name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        "\$${package.price.toStringAsFixed(2)}",
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    PackageDetailRow(
+                      icon: Icons.trending_up_rounded,
+                      label: "Daily Earn",
+                      value: "\$${package.dailyIncome.toStringAsFixed(2)}",
+                    ),
                       PackageDetailRow(
                         icon: Icons.calendar_today_rounded,
                         label: "Daily Ads",
@@ -1881,7 +1891,7 @@ class _MembershipPageState extends State<MembershipPage>
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = screenWidth > 600 ? 3 : 2;
     final horizontalPadding = screenWidth > 600 ? 20.0 : 14.0;
-    final childAspectRatio = screenWidth > 600 ? 0.72 : 0.58;
+    final childAspectRatio = screenWidth > 600 ? 0.78 : 0.70;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
