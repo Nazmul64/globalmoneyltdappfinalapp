@@ -17,6 +17,7 @@ class SupportLiveChatScreen extends StatefulWidget {
 }
 
 class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
+  static const Color primaryColor = Color(0xFF4361EE);
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 

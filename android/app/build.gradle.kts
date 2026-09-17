@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.globalmoneyltd.globalmoneyltd"
     compileSdk = 36
-    ndkVersion = "25.1.8937393"
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.globalmoneyltd.globalmoneyltd"
