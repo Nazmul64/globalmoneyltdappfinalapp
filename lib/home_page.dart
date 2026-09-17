@@ -2627,24 +2627,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         );
         break;
       case 1:
-        try {
-          SharedPreferences prefs = await SharedPreferences.getInstance();
-          String? token = prefs.getString('auth_token');
-
-          if (token != null && token.isNotEmpty) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => WithdrawScreen(authToken: token),
-              ),
-            );
-          } else {
-            _showErrorSnackBar("Please login first");
-          }
-        } catch (e) {
-          print('❌ Error loading token: $e');
-          _showErrorSnackBar("Please login first");
-        }
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const DepositScreen(),
+          ),
+        );
         break;
       case 3:
         Navigator.push(
@@ -3041,8 +3029,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet),
-            label: 'Withdraw',
+            icon: Icon(Icons.receipt_long),
+            label: 'Deposit History',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Friend Chat'),
@@ -4081,11 +4069,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             _buildCardButton(
               key: "total_deposit",
-              defaultIcon: Icons.attach_money,
-              defaultTitle: "Total Deposit",
+              defaultIcon: Icons.add_circle_outline,
+              defaultTitle: "Add Balance",
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => DepositScreen()),
+                MaterialPageRoute(builder: (_) => const AddBalancePage()),
               ),
               primaryColor: primaryColor,
               secondaryColor: secondaryColor,

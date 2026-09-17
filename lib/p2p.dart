@@ -1564,6 +1564,13 @@ class _P2PPageState extends State<P2PPage> with SingleTickerProviderStateMixin {
         } else {
           _showMessage(data['message'] ?? 'Request failed', isError: true);
         }
+      } else if (response.statusCode == 403) {
+        try {
+          final error = json.decode(response.body);
+          _showWithdrawBlockedDialog(error['message']);
+        } catch (_) {
+          _showWithdrawBlockedDialog();
+        }
       } else {
         final error = json.decode(response.body);
         _showMessage(
@@ -1584,6 +1591,41 @@ class _P2PPageState extends State<P2PPage> with SingleTickerProviderStateMixin {
       _showMessage('Connection error: ${e.toString()}', isError: true);
       debugPrint('❌ Request error: $e');
     }
+  }
+
+  void _showWithdrawBlockedDialog([String? customMessage]) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.block_flipped, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "উত্তোলন স্থগিত (Withdrawal Blocked)",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          customMessage ??
+              "আপনার অ্যাকাউন্ট থেকে উইথড্র ও P2P USDT সেল সাময়িকভাবে বন্ধ আছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("ঠিক আছে",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          ),
+        ],
+      ),
+    );
   }
 
   // ==================== VALIDATE AMOUNT ====================

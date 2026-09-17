@@ -46,6 +46,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
 
   bool isLoading = true;
   bool isSubmitting = false;
+  bool isWithdrawBlocked = false;
   bool isLoadingInstructions = true;
   bool isLoadingHistory = false;
   bool showHistory = false;
@@ -274,7 +275,14 @@ class _WithdrawScreenState extends State<WithdrawScreen>
         if (data["success"] == true && data["data"] != null) {
           final responseData = data["data"];
 
+          final blocked = responseData["is_withdraw_blocked"] == true ||
+              responseData["is_blocked"] == true ||
+              responseData["user"]?["is_withdraw_blocked"] == true ||
+              responseData["user"]?["is_blocked"] == true ||
+              data["is_withdraw_blocked"] == true;
+
           setState(() {
+            isWithdrawBlocked = blocked;
             balance = _parseDouble(responseData["user"]?["balance"]);
             totalUserBalance = _parseDouble(responseData["total_user_balance"]);
             paymentMethods = _parsePaymentMethods(
@@ -297,12 +305,24 @@ class _WithdrawScreenState extends State<WithdrawScreen>
 
           debugPrint('✅ Data loaded successfully');
           debugPrint('💰 Balance: $balance');
+          debugPrint('🚫 Is Withdraw Blocked: $isWithdrawBlocked');
           debugPrint('💳 Payment Methods: ${paymentMethods.length}');
           debugPrint('📉 Min: $minWithdraw | Max: $maxWithdraw');
+
+          if (isWithdrawBlocked) {
+            _showWithdrawBlockedDialog();
+          }
         } else {
           setState(() => isLoading = false);
           _showErrorMessage(data["message"] ?? "Failed to load data");
         }
+      } else if (response.statusCode == 403) {
+        setState(() {
+          isLoading = false;
+          isWithdrawBlocked = true;
+        });
+        final errorData = jsonDecode(response.body);
+        _showWithdrawBlockedDialog(errorData["message"]);
       } else if (response.statusCode == 401) {
         setState(() => isLoading = false);
         _showErrorMessage("Invalid authentication token. Please try again.");
@@ -528,6 +548,10 @@ class _WithdrawScreenState extends State<WithdrawScreen>
         } else {
           _showErrorMessage(data["message"] ?? "Failed to submit request");
         }
+      } else if (response.statusCode == 403) {
+        setState(() => isWithdrawBlocked = true);
+        final errorData = jsonDecode(response.body);
+        _showWithdrawBlockedDialog(errorData["message"]);
       } else if (response.statusCode == 401) {
         _showErrorMessage(
           "Authentication failed. Please check your credentials.",
@@ -550,7 +574,44 @@ class _WithdrawScreenState extends State<WithdrawScreen>
       _handleUnexpectedError(e);
     }
   }
-  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _showWithdrawBlockedDialog([String? customMessage]) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.block_flipped, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "উত্তোলন স্থগিত (Withdrawal Blocked)",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          customMessage ??
+              "আপনার অ্যাকাউন্ট থেকে উইথড্র ও P2P USDT সেল সাময়িকভাবে বন্ধ আছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+            },
+            child: const Text("ঠিক আছে",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          ),
+        ],
+      ),
+    );
+  }
   // PART 2 - VALIDATION, ERROR HANDLERS & UTILITY METHODS
   // ═══════════════════════════════════════════════════════════════════════════
   // This part continues from Part 1 - Add after _submitWithdraw method
@@ -1941,7 +2002,9 @@ class _WithdrawScreenState extends State<WithdrawScreen>
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: (isSubmitting || !isFormValid) ? null : _submitWithdraw,
+        onPressed: (isSubmitting || !isFormValid || isWithdrawBlocked)
+            ? null
+            : _submitWithdraw,
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           shape: RoundedRectangleBorder(

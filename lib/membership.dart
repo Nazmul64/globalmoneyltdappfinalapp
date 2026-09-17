@@ -96,7 +96,7 @@ class PackageModel {
       dailyIncome: _parseDouble(json['daily_income']),
       dailyLimit: int.tryParse(json['daily_limit']?.toString() ?? '0') ?? 0,
       validity: int.tryParse(json['validity']?.toString() ?? '0') ?? 0,
-      photo: json['photo']?.toString(),
+      photo: json['photo_url']?.toString() ?? json['photo']?.toString(),
     );
   }
 
@@ -152,7 +152,7 @@ class UserPackageModel {
       amount: PackageModel._parseDouble(json['amount']),
       dailyIncome: PackageModel._parseDouble(json['daily_income']),
       validity: int.tryParse(json['validity']?.toString() ?? '0') ?? 0,
-      photo: json['photo']?.toString(),
+      photo: json['photo_url']?.toString() ?? json['photo']?.toString(),
     );
   }
 
@@ -306,6 +306,7 @@ class PackageCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool isCurrent;
   final bool isUpdate;
+  final bool hasActivePackage;
 
   const PackageCard({
     Key? key,
@@ -314,6 +315,7 @@ class PackageCard extends StatelessWidget {
     required this.onTap,
     this.isCurrent = false,
     this.isUpdate = false,
+    this.hasActivePackage = false,
   }) : super(key: key);
 
   @override
@@ -329,17 +331,21 @@ class PackageCard extends StatelessWidget {
         border: Border.all(
           color: isCurrent
               ? AppTheme.activeGreen
-              : isUpdate
-              ? AppTheme.info.withOpacity(0.5)
-              : AppTheme.primary.withOpacity(0.3),
+              : hasActivePackage
+                  ? Colors.grey.shade300
+                  : AppTheme.primary.withOpacity(0.3),
           width: isCurrent ? 2 : 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (isCurrent ? AppTheme.activeGreen : AppTheme.primary)
-                .withOpacity(0.1),
+            color: (isCurrent
+                    ? AppTheme.activeGreen
+                    : hasActivePackage
+                        ? Colors.black
+                        : AppTheme.primary)
+                .withOpacity(0.08),
             blurRadius: 6,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -514,7 +520,7 @@ class PackageCard extends StatelessWidget {
                                     ),
                                     SizedBox(width: 4),
                                     Text(
-                                      "Current",
+                                      "Current Plan",
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 11,
@@ -524,53 +530,82 @@ class PackageCard extends StatelessWidget {
                                   ],
                                 ),
                               )
-                            : Container(
-                                decoration: BoxDecoration(
-                                  gradient: isUpdate
-                                      ? LinearGradient(
-                                          colors: [
-                                            AppTheme.info,
-                                            AppTheme.info.withOpacity(0.8),
-                                          ],
-                                        )
-                                      : AppTheme.primaryGradient,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: onTap,
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      alignment: Alignment.center,
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            isUpdate
-                                                ? Icons.upgrade_rounded
-                                                : Icons
-                                                      .shopping_cart_checkout_rounded,
-                                            size: 13,
-                                            color: Colors.white,
+                            : hasActivePackage
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: onTap,
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          alignment: Alignment.center,
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.block,
+                                                size: 13,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                "Unavailable",
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 11,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            isUpdate ? "Update" : "Buy Now",
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11,
-                                              color: Colors.white,
-                                            ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    decoration: BoxDecoration(
+                                      gradient: AppTheme.primaryGradient,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: onTap,
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          alignment: Alignment.center,
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons
+                                                    .shopping_cart_checkout_rounded,
+                                                size: 13,
+                                                color: Colors.white,
+                                              ),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                "Buy Now",
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 11,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
                       ),
                     ],
                   ),
@@ -784,9 +819,14 @@ class _MembershipPageState extends State<MembershipPage>
       return;
     }
 
-    if (_currentPackage?.packageId == package.id) {
-      debugPrint('⚠️ User already has this package');
-      _showAlreadyPurchasedDialog(package);
+    if (_currentPackage != null) {
+      if (_currentPackage?.packageId == package.id) {
+        debugPrint('⚠️ User already has this package');
+        _showAlreadyPurchasedDialog(package);
+      } else {
+        debugPrint('⚠️ Single membership constraint');
+        _showSingleMembershipConstraintDialog();
+      }
       return;
     }
 
@@ -796,16 +836,45 @@ class _MembershipPageState extends State<MembershipPage>
       return;
     }
 
-    final isUpdate = _currentPackage != null;
-    debugPrint('🔄 Is Update: $isUpdate');
-
-    final confirm = await _showConfirmationDialog(package, isUpdate);
+    final confirm = await _showConfirmationDialog(package, false);
     if (confirm != true) {
       debugPrint('❌ User cancelled purchase');
       return;
     }
 
-    await _processPackageAction(package, isUpdate);
+    await _processPackageAction(package, false);
+  }
+
+  void _showSingleMembershipConstraintDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.info_outline, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "মেম্বারশিপ সীমাবদ্ধতা",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "একটি অ্যাকাউন্টে একটি মেম্বারশিপ প্রযোজ্য। আপনি ইতিমধ্যে '${_currentPackage?.packageName ?? "Active Membership"}' ক্রয় করেছেন।",
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("ঠিক আছে",
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _processPackageAction(
@@ -828,20 +897,29 @@ class _MembershipPageState extends State<MembershipPage>
       if (res.statusCode == 200) {
         final json = jsonDecode(res.body);
         if (json['success'] == true) {
-          _showSnack(
-            "✅ Package ${isUpdate ? 'updated' : 'purchased'} successfully!",
-            SnackBarType.success,
-          );
+          final packageData = (json['data'] as Map<String, dynamic>?) ??
+              {
+                'package_id': package.id,
+                'package_name': package.name,
+                'photo_url': package.getPhotoUrl(_baseUrl),
+                'daily_income': package.dailyIncome,
+                'daily_limit': package.dailyLimit,
+              };
 
-          debugPrint('🔄 Refreshing data after successful purchase...');
-          await Future.delayed(Duration(milliseconds: 800));
-          await _initializeData();
+          _showMembershipSuccessDialog(packageData);
         } else {
           _showSnack(
             json['message']?.toString() ?? 'Purchase failed',
             SnackBarType.error,
           );
         }
+      } else if (res.statusCode == 400) {
+        final json = jsonDecode(res.body);
+        _showSnack(
+          json['message']?.toString() ??
+              "You already have an active membership!",
+          SnackBarType.warning,
+        );
       } else if (res.statusCode == 401) {
         _showSnack("Session expired. Please login again.", SnackBarType.error);
       } else {
@@ -861,6 +939,154 @@ class _MembershipPageState extends State<MembershipPage>
     } finally {
       if (mounted) setState(() => _isPurchasing = false);
     }
+  }
+
+  /// 🎉 Celebration animation & success dialog on purchase
+  void _showMembershipSuccessDialog(Map<String, dynamic> packageData) {
+    final photoUrl = packageData['photo_url'] ?? packageData['photo'];
+    final name = packageData['package_name'] ?? packageData['name'] ?? 'Membership';
+    final dailyIncome = packageData['daily_income']?.toString() ?? '0.00';
+    final dailyLimit = packageData['daily_limit']?.toString() ?? '0';
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: "Success",
+      pageBuilder: (ctx, anim1, anim2) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E2D),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.35),
+                    blurRadius: 25,
+                    spreadRadius: 6,
+                  )
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.stars_rounded,
+                      color: Colors.amber,
+                      size: 60,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "Congratulations!",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "Membership Buy Successful",
+                    style: TextStyle(
+                      color: Color(0xFF09A372),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (photoUrl != null && photoUrl.toString().isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          photoUrl.toString().startsWith('http')
+                              ? photoUrl.toString()
+                              : '$_baseUrl/$photoUrl',
+                          height: 90,
+                          width: 140,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.workspace_premium,
+                            size: 60,
+                            color: Colors.amber,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      "Daily Income: \$$dailyIncome  |  Daily Ads: $dailyLimit",
+                      style: TextStyle(
+                        color: Colors.grey.shade300,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _initializeData();
+                      },
+                      child: const Text(
+                        "Start Earning Now",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showSnack(String msg, SnackBarType t) {
@@ -1835,7 +2061,7 @@ class _MembershipPageState extends State<MembershipPage>
                     ),
                     child: Text(
                       _currentPackage != null
-                          ? "Upgrade/Change Package"
+                          ? "All Membership Packages"
                           : "Available Packages",
                       style: TextStyle(
                         fontSize: 16,
@@ -1873,7 +2099,8 @@ class _MembershipPageState extends State<MembershipPage>
                             baseUrl: _baseUrl,
                             onTap: () => _handlePackageAction(p),
                             isCurrent: isCurrent,
-                            isUpdate: _currentPackage != null && !isCurrent,
+                            isUpdate: false,
+                            hasActivePackage: _currentPackage != null,
                           ),
                         );
                       }, childCount: _packages.length),

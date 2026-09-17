@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -24,6 +26,8 @@ class _ReferralScreenState extends State<ReferralScreen> {
   int totalReferrals = 0;
   int activeUsers = 0;
   double totalEarnings = 0.0;
+  String referralCode = '';
+  String referralLink = '';
   List<Map<String, dynamic>> referralUsers = [];
 
   bool isLoading = true;
@@ -187,6 +191,29 @@ class _ReferralScreenState extends State<ReferralScreen> {
         if (data['status'] == true) {
           final List<dynamic> users = data['referral_users'] ?? [];
 
+          // Parse referral code and link from response
+          String code = data['referral_code']?.toString() ??
+              data['ref_code']?.toString() ??
+              data['data']?['referral_code']?.toString() ??
+              data['data']?['ref_code']?.toString() ??
+              '';
+
+          String link = data['referral_link']?.toString() ??
+              data['data']?['referral_link']?.toString() ??
+              '';
+
+          if (code.isEmpty) {
+            final prefs = await SharedPreferences.getInstance();
+            code = prefs.getString('referral_code') ??
+                prefs.getString('ref_code') ??
+                prefs.getString('user_id') ??
+                '';
+          }
+
+          if (link.isEmpty && code.isNotEmpty) {
+            link = '${ApiConfig.mediaBaseUrl}/register?ref=$code';
+          }
+
           // Get active users from API response or calculate
           int active = data['active_users'] ?? 0;
           if (active == 0) {
@@ -207,6 +234,8 @@ class _ReferralScreenState extends State<ReferralScreen> {
 
           if (mounted) {
             setState(() {
+              referralCode = code;
+              referralLink = link;
               totalReferrals = data['total_referrals'] ?? users.length;
               activeUsers = active;
               totalEarnings = earnings;
@@ -229,7 +258,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
             });
           }
 
-          print('✅ Loaded ${totalReferrals} referrals');
+          print('✅ Loaded ${totalReferrals} referrals, code: $referralCode');
           print('👥 Active users: $activeUsers');
           print('💰 Total earnings: \$$earnings');
         } else {
@@ -361,6 +390,9 @@ class _ReferralScreenState extends State<ReferralScreen> {
                         ],
                       ),
               ),
+
+              // Referral Code & Link Sharing Card
+              _buildReferralCodeCard(),
 
               // Table Section
               Padding(
@@ -507,6 +539,195 @@ class _ReferralScreenState extends State<ReferralScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferralCodeCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(color: themeColor.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: themeLightColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.share_rounded, color: themeColor, size: 18),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Your Referral Code & Link',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Referral Code Box
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Referral Code',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        referralCode.isNotEmpty
+                            ? referralCode
+                            : (isLoading ? 'Loading...' : 'N/A'),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: themeColor,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: referralCode.isEmpty
+                      ? null
+                      : () {
+                          Clipboard.setData(ClipboardData(text: referralCode));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: const [
+                                  Icon(Icons.check_circle,
+                                      color: Colors.white, size: 18),
+                                  SizedBox(width: 8),
+                                  Text("Referral code copied!"),
+                                ],
+                              ),
+                              backgroundColor: Colors.green.shade700,
+                              duration: const Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  label: const Text('Copy Code'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: themeColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Referral Link Box & Share
+          if (referralLink.isNotEmpty)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: referralLink));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: const [
+                              Icon(Icons.check_circle,
+                                  color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Text("Referral link copied!"),
+                            ],
+                          ),
+                          backgroundColor: Colors.green.shade700,
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: Icon(Icons.link_rounded, size: 16, color: themeColor),
+                    label: Text(
+                      'Copy Link',
+                      style: TextStyle(
+                          color: themeColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: themeColor.withOpacity(0.5)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final shareText =
+                          'Join me on GlobalAds and earn daily! Use my referral code: $referralCode or register here: $referralLink';
+                      Share.share(shareText);
+                    },
+                    icon: const Icon(Icons.share_rounded, size: 16),
+                    label: const Text(
+                      'Share Link',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: themeDarkColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );

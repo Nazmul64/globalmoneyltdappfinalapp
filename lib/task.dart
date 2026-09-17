@@ -22,7 +22,8 @@ class TaskPage extends StatefulWidget {
   State<TaskPage> createState() => _TaskPageState();
 }
 
-class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
+class _TaskPageState extends State<TaskPage>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // ======================== CONFIGURATION ========================
   static const platform = MethodChannel('ad_timer_overlay');
   // URL: use ApiConfig.baseUrl
@@ -141,6 +142,7 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initAnimations();
     _setupNativeHandler();
     _init();
@@ -207,7 +209,50 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
     _admobNativeAd?.dispose();
     _admobAppOpenAd?.dispose();
 
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  // ======================== APP LIFECYCLE & BACKGROUND HANDLING ========================
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _logInfo('📱 App resumed from background - syncing timers & task state...');
+      _handleAppResumed();
+    }
+  }
+
+  /// 🔄 Handles seamless timer resume & auto-finish when returning from background
+  Future<void> _handleAppResumed() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final startMs = prefs.getInt('ad_timer_start_ms');
+      final durationSeconds = prefs.getInt('ad_duration_seconds') ?? _buttonTimerSeconds;
+
+      if (_adRunning && startMs != null) {
+        final elapsedSeconds =
+            ((DateTime.now().millisecondsSinceEpoch - startMs) / 1000).floor();
+        _logInfo('⏱️ Ad timer elapsed: $elapsedSeconds/$durationSeconds seconds');
+
+        if (elapsedSeconds >= durationSeconds) {
+          _logSuccess('✅ Ad timer completed while app was in background! Auto-finishing...');
+          await prefs.remove('ad_timer_start_ms');
+          await _onAdTimerComplete();
+          return;
+        }
+      }
+
+      // Sync user earning data and check break status with backend
+      await _fetchUserEarningData();
+
+      // If break completed while away and claim button is ready, notify user
+      if (_showClaim && !_breakActive) {
+        _logSuccess('🎁 Break finished in background, reward claim is ready!');
+      }
+    } catch (e) {
+      _logError('❌ Error handling app resume: $e');
+    }
   }
 
   // ======================== MAIN INITIALIZATION ========================
@@ -1676,6 +1721,11 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
       _logInfo('   📊 Using DATABASE value: $secondsToRun seconds');
       _logInfo('   ✅ Timer settings loaded: $_timerSettingsLoaded');
 
+      // 💾 Save start timestamp in SharedPreferences for seamless background resume
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('ad_timer_start_ms', DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt('ad_duration_seconds', secondsToRun);
+
       // 🔥 Pass the DYNAMIC value from database to native Android
       await platform.invokeMethod('startAdTimer', {
         'adTimerSeconds': secondsToRun,
@@ -1727,6 +1777,8 @@ class _TaskPageState extends State<TaskPage> with TickerProviderStateMixin {
   Future<void> _hideAllOverlays() async {
     try {
       _logInfo('🧹 Hiding all overlays...');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('ad_timer_start_ms');
       await platform.invokeMethod('hideAllOverlays');
       _logSuccess('✅ All overlays hidden');
     } catch (e) {
