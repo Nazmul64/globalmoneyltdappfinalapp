@@ -16,7 +16,7 @@ class ApiConfig {
 
   /// ⚙️ LOCAL TESTING TOGGLE:
   /// - Set [isLocalMode] = `true` to test on your local machine / server.
-  /// - Set [isLocalMode] = `false` to switch back to live production site (https://globalmoney.ltd).
+  /// - Set [isLocalMode] = `false` to use live production site (https://ukearn.com).
   static const bool isLocalMode = false;
 
   /// 🖥️ LOCAL SERVER URL:
@@ -26,7 +26,7 @@ class ApiConfig {
 
 
   /// 🌐 LIVE PRODUCTION SERVER URL
-  static const String liveServerUrl = 'https://globalmoney.ltd';
+  static const String liveServerUrl = 'https://ukearn.com';
 
   /// Website base URL (media, images, avatar, agent login, etc.)
   static const String mediaBaseUrl = isLocalMode ? localServerUrl : liveServerUrl;
