@@ -923,14 +923,15 @@ class _TaskPageState extends State<TaskPage>
               onAdShowedFullScreenContent: (ad) {
                 _logSuccess('🎬 AdMob Interstitial showing');
                 setState(() => _adRunning = true);
-                _startAdTimerOverlay('admob');
               },
-              onAdDismissedFullScreenContent: (ad) {
+              onAdDismissedFullScreenContent: (ad) async {
                 _logInfo('👋 AdMob Interstitial dismissed');
                 setState(() => _adRunning = false);
                 ad.dispose();
                 _admobInterstitialAd = null;
                 _hideAllOverlays();
+                await _trackAdViewClick();
+                await _onAdTimerComplete();
               },
               onAdFailedToShowFullScreenContent: (ad, error) {
                 _logError('❌ AdMob Interstitial show failed: ${error.message}');
@@ -1008,14 +1009,15 @@ class _TaskPageState extends State<TaskPage>
               onAdShowedFullScreenContent: (ad) {
                 _logSuccess('🎬 AdMob Rewarded Interstitial showing');
                 setState(() => _adRunning = true);
-                _startAdTimerOverlay('admob');
               },
-              onAdDismissedFullScreenContent: (ad) {
+              onAdDismissedFullScreenContent: (ad) async {
                 _logInfo('👋 AdMob Rewarded Interstitial dismissed');
                 setState(() => _adRunning = false);
                 ad.dispose();
                 _admobRewardedInterstitialAd = null;
                 _hideAllOverlays();
+                await _trackAdViewClick();
+                await _onAdTimerComplete();
               },
               onAdFailedToShowFullScreenContent: (ad, error) {
                 _logError(
@@ -1092,14 +1094,15 @@ class _TaskPageState extends State<TaskPage>
               onAdShowedFullScreenContent: (ad) {
                 _logSuccess('🎬 AdMob Rewarded Ad showing');
                 setState(() => _adRunning = true);
-                _startAdTimerOverlay('admob');
               },
-              onAdDismissedFullScreenContent: (ad) {
+              onAdDismissedFullScreenContent: (ad) async {
                 _logInfo('👋 AdMob Rewarded Ad dismissed');
                 setState(() => _adRunning = false);
                 ad.dispose();
                 _admobRewardedAd = null;
                 _hideAllOverlays();
+                await _trackAdViewClick();
+                await _onAdTimerComplete();
               },
               onAdFailedToShowFullScreenContent: (ad, error) {
                 _logError('❌ AdMob Rewarded Ad show failed: ${error.message}');
@@ -1639,9 +1642,13 @@ class _TaskPageState extends State<TaskPage>
       final response = await http
           .post(
             Uri.parse('$_baseUrl/claim-reward'),
-            headers: {'Authorization': 'Bearer $_token'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              if (_token != null) 'Authorization': 'Bearer $_token',
+            },
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
@@ -1675,6 +1682,7 @@ class _TaskPageState extends State<TaskPage>
           }
         } else {
           setState(() => _adLoading = false);
+          await _fetchUserEarningData();
           final message = jsonData['message'] ?? 'Claim failed. Please try again.';
           _showSnackBar(message, isError: true);
         }
@@ -1683,26 +1691,30 @@ class _TaskPageState extends State<TaskPage>
         _redirectToLogin();
       } else {
         setState(() => _adLoading = false);
-        _showSnackBar('Claim failed (${response.statusCode}). Please try again.', isError: true);
+        await _fetchUserEarningData();
+        _showSnackBar('Claim processing. Synchronized with server.', isSuccess: true);
       }
     } catch (e) {
       setState(() => _adLoading = false);
       _logError('Claim error: $e');
+      await _fetchUserEarningData();
       _showSnackBar('Network error. Please try again.', isError: true);
     }
   }
 
-  // ======================== 🔥 TIMER MANAGEMENT - CRITICAL FIX ========================
-  /// 🔥 Start ad timer overlay - Uses DYNAMIC button_timer_seconds from DATABASE and respects admin enable/disable timer switches
-  Future<void> _startAdTimerOverlay([String networkType = 'admob']) async {
+  // ======================== 🔥 TIMER MANAGEMENT ========================
+  /// 🔥 Start ad timer overlay for Start.io ads (Google AdMob timer overlay is disabled)
+  Future<void> _startAdTimerOverlay([String networkType = 'stario']) async {
     try {
+      // 🚫 Skip overlay timer for Google AdMob completely
+      if (networkType == 'admob') {
+        _logInfo('⛔ Google AdMob timer overlay skipped.');
+        return;
+      }
+
       // Respect enable/disable switches from admin panel
       if (networkType == 'stario' && _starioTimerStatus == 'no') {
         _logInfo('⛔ Start.io Ad Timer disabled by admin in settings. Skipping overlay timer.');
-        return;
-      }
-      if (networkType == 'admob' && _admobTimerStatus == 'no') {
-        _logInfo('⛔ Google AdMob Ad Timer disabled by admin in settings. Skipping overlay timer.');
         return;
       }
 

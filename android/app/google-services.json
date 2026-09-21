@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "98037432986",
-    "project_id": "fir-c553a",
-    "storage_bucket": "fir-c553a.firebasestorage.app"
+    "project_number": "927335662145",
+    "project_id": "globalmoneyltd-198bd",
+    "storage_bucket": "globalmoneyltd-198bd.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:98037432986:android:f1d911e2cd4ae99e4f9523",
+        "mobilesdk_app_id": "1:927335662145:android:ed78200fdfbfe8b08fbcc0",
         "android_client_info": {
           "package_name": "com.globalmoneyltd.globalmoneyltd"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDEx9VV-2D0FmdfGjphDEeFeCu07Wy6U1o"
+          "current_key": "AIzaSyD26r_OPxP5eyzbL_miu8dXgiWR-m3-TQA"
         }
       ],
       "services": {

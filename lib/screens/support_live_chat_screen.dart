@@ -208,6 +208,7 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
         request.headers['Accept'] = 'application/json';
       }
       request.fields['message_type'] = 'image';
+      request.fields['message'] = 'Image';
       request.files.add(await http.MultipartFile.fromPath('image', pickedFile.path));
 
       final streamedResponse = await request.send();
@@ -472,22 +473,56 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
                                             ),
                                           ),
                                           const SizedBox(height: 4),
-                                          if (msg['attachment_path'] != null && msg['attachment_path'].toString().isNotEmpty)
+                                          if (_getMessageImageUrl(msg) != null) ...[
                                             Padding(
                                               padding: const EdgeInsets.only(bottom: 6),
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(10),
-                                                child: ConstrainedBox(
-                                                  constraints: const BoxConstraints(maxHeight: 200),
-                                                  child: Image.network(
-                                                    ApiConfig.mediaUrl(msg['attachment_path'].toString()),
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                                              child: GestureDetector(
+                                                onTap: () => _showFullImageDialog(context, _getMessageImageUrl(msg)!),
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  child: ConstrainedBox(
+                                                    constraints: const BoxConstraints(
+                                                      maxHeight: 220,
+                                                      maxWidth: 260,
+                                                    ),
+                                                    child: Image.network(
+                                                      _getMessageImageUrl(msg)!,
+                                                      fit: BoxFit.cover,
+                                                      loadingBuilder: (context, child, loadingProgress) {
+                                                        if (loadingProgress == null) return child;
+                                                        return Container(
+                                                          height: 140,
+                                                          width: 200,
+                                                          color: Colors.black12,
+                                                          child: const Center(
+                                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                                          ),
+                                                        );
+                                                      },
+                                                      errorBuilder: (context, error, stackTrace) => Container(
+                                                        padding: const EdgeInsets.all(12),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.grey.shade200,
+                                                          borderRadius: BorderRadius.circular(8),
+                                                        ),
+                                                        child: const Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.broken_image, color: Colors.grey),
+                                                            SizedBox(width: 6),
+                                                            Text('Image unavailable', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                          if (msg['message'] != null && msg['message'].toString().isNotEmpty)
+                                          ],
+                                          if (msg['message'] != null &&
+                                              msg['message'].toString().isNotEmpty &&
+                                              (_getMessageImageUrl(msg) == null || msg['message'] != 'Image'))
                                             Text(
                                               msg['message'] ?? '',
                                               style: TextStyle(
@@ -670,6 +705,61 @@ class _SupportLiveChatScreenState extends State<SupportLiveChatScreen> {
           color: Colors.white,
           fontWeight: FontWeight.bold,
           fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  String? _getMessageImageUrl(dynamic msg) {
+    if (msg == null || msg is! Map) return null;
+    final candidates = [
+      msg['image_url'],
+      msg['image'],
+      msg['attachment_path'],
+      msg['file_path'],
+      msg['attachment'],
+      msg['photo'],
+      msg['media_url'],
+      msg['file_url'],
+    ];
+    for (final c in candidates) {
+      if (c != null && c.toString().trim().isNotEmpty) {
+        return ApiConfig.mediaUrl(c.toString().trim());
+      }
+    }
+    return null;
+  }
+
+  void _showFullImageDialog(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(10),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.broken_image, color: Colors.white, size: 80),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

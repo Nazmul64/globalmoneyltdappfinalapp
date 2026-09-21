@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.globalmoneyltd.globalmoneyltd">
-
     <!-- ====================================================================
          🔔 PERMISSIONS
-         ==================================================================== -->
+    ==================================================================== -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -12,11 +12,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
     <!-- 🔔 Notification permission (Android 13+) - IMPORTANT -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
     <!-- ====================================================================
          📱 APPLICATION
          ==================================================================== -->
@@ -26,7 +24,6 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
-
         <!-- ====================================================================
              📢 START.IO ADS
              ==================================================================== -->
@@ -55,6 +52,10 @@
             android:value="false" />
 
         <meta-data
+            android:name="com.startapp.sdk.PAS_CONSENT"
+            android:value="true" />
+
+        <meta-data
             android:name="com.startapp.sdk.AUTO"
             android:value="false" />
 
@@ -62,13 +63,22 @@
             android:name="com.startapp.sdk.INITIALIZE_ON_STARTUP"
             android:value="false" />
 
+        <activity
+            android:name="com.startapp.sdk.adsbase.consent.ConsentActivity"
+            android:enabled="false"
+            tools:node="remove" />
+
+        <activity
+            android:name="com.startapp.sdk.adsbase.ConsentActivity"
+            android:enabled="false"
+            tools:node="remove" />
+
         <!-- ====================================================================
              📢 GOOGLE ADMOB
              ==================================================================== -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3308969201135774~8261496951" />
-
         <!-- ====================================================================
              📱 MAIN ACTIVITY
              ==================================================================== -->
@@ -111,6 +121,13 @@
             </intent-filter>
 
         </activity>
+
+        <!-- ====================================================================
+             🔔 FIREBASE DEFAULT NOTIFICATION CHANNEL
+             ==================================================================== -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="high_importance_channel" />
 
         <!-- ====================================================================
              🔔 ONESIGNAL NOTIFICATION CONFIGURATION
@@ -168,5 +185,4 @@
             <data android:scheme="https" />
         </intent>
     </queries>
-
 </manifest>

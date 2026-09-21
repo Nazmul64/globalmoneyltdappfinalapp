@@ -20,6 +20,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 // Import other pages
 import 'config/api_config.dart';
 import 'services/app_service.dart';
+import 'services/firebase_notification_service.dart';
 import 'addbalance.dart';
 import 'membership.dart';
 import 'profile.dart';
@@ -1048,6 +1049,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               _userEmail != null) {
             await _sendPlayerIdToServer(_oneSignalPlayerId!);
           }
+
+          // ✅ Sync Firebase FCM Token with Laravel backend
+          if (_userEmail != null && _authToken != null) {
+            FirebaseNotificationService().sendTokenToBackend(_userEmail!, authToken: _authToken);
+          }
         }
       } else if (response.statusCode == 401) {
         await _handleUnauthorized();
@@ -1157,7 +1163,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _userEmail = null;
     });
 
-    // ✅ Logout from OneSignal
+    // ✅ Logout from OneSignal & Firebase
     if (_oneSignalInitialized) {
       try {
         OneSignal.logout();
@@ -1165,6 +1171,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       } catch (e) {
         print('⚠️ OneSignal logout error: $e');
       }
+    }
+    try {
+      FirebaseNotificationService().clearTokenOnLogout();
+    } catch (e) {
+      print('⚠️ Firebase logout error: $e');
     }
 
     _showErrorSnackBar('Session expired. Please login again.');
@@ -3676,7 +3687,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             _userEmail = null;
                           });
 
-                          // ✅ Logout from OneSignal
+                          // ✅ Logout from OneSignal & Firebase
                           if (_oneSignalInitialized) {
                             try {
                               OneSignal.logout();
@@ -3684,6 +3695,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             } catch (e) {
                               print('⚠️ OneSignal logout error: $e');
                             }
+                          }
+                          try {
+                            FirebaseNotificationService().clearTokenOnLogout();
+                          } catch (e) {
+                            print('⚠️ Firebase logout error: $e');
                           }
 
                           Navigator.pop(context);
@@ -3889,9 +3905,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     required Color secondaryColor,
   }) {
     final setting = _homeCardSettings[key];
-    final String label = (setting != null && setting['title'] != null && setting['title'].toString().isNotEmpty)
+    String label = (setting != null && setting['title'] != null && setting['title'].toString().isNotEmpty)
         ? setting['title'].toString()
         : defaultTitle;
+
+    if (key == 'total_deposit' || key == 'deposit' || label == 'Total Deposit') {
+      label = 'Deposit';
+    }
 
     final IconData icon = (setting != null && setting['icon'] != null && setting['icon'].toString().isNotEmpty)
         ? AppService.getIconData(setting['icon'].toString(), fallback: defaultIcon)
@@ -4070,7 +4090,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             _buildCardButton(
               key: "total_deposit",
               defaultIcon: Icons.add_circle_outline,
-              defaultTitle: "Add Balance",
+              defaultTitle: "Deposit",
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AddBalancePage()),

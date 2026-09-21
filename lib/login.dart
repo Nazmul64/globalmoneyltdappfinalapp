@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/onesignal_notification_service.dart';
+import '../services/firebase_notification_service.dart';
 import 'home_page.dart';
 import 'register.dart';
 import 'forgot_password.dart';
@@ -606,6 +607,12 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userEmail != null) {
           await OneSignalNotificationService().setExternalUserId(userEmail);
           debugPrint('✅ OneSignal user ID set');
+        }
+
+        // Sync Firebase FCM Token with Laravel backend
+        if (userEmail != null || token != null) {
+          await FirebaseNotificationService().sendTokenToBackend(userEmail ?? '', authToken: token);
+          debugPrint('✅ Firebase FCM token synced on login');
         }
 
         // Load logo from database after login

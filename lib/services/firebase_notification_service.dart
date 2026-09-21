@@ -287,19 +287,20 @@ class FirebaseNotificationService {
   }
 
   // ====================================================================
-  // 📤 SEND TOKEN TO BACKEND (Login এর পরে)
   // ====================================================================
-  Future<bool> sendTokenToBackend(String userEmail) async {
+  // 📤 SEND TOKEN TO BACKEND (Login এর পরে / Token Refresh এ)
+  // ====================================================================
+  Future<bool> sendTokenToBackend(String userEmail, {String? authToken}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('fcm_token');
+      final token = prefs.getString('fcm_token') ?? await _firebaseMessaging.getToken();
 
       if (token == null) {
         debugPrint('⚠️ No FCM token available');
         return false;
       }
 
-      return await _sendTokenToBackend(token, userEmail: userEmail);
+      return await _sendTokenToBackend(token, userEmail: userEmail, authToken: authToken);
     } catch (e) {
       debugPrint('❌ Error sending token: $e');
       return false;
@@ -309,82 +310,158 @@ class FirebaseNotificationService {
   // ====================================================================
   // 🌐 SEND TOKEN TO BACKEND (INTERNAL)
   // ====================================================================
-  Future<bool> _sendTokenToBackend(String token, {String? userEmail}) async {
+  Future<bool> _sendTokenToBackend(String token, {String? userEmail, String? authToken}) async {
     try {
-      if (userEmail == null) {
-        final prefs = await SharedPreferences.getInstance();
-        userEmail = prefs.getString('user_email');
-      }
+      final prefs = await SharedPreferences.getInstance();
+      final effectiveEmail = userEmail ?? prefs.getString('user_email');
+      final effectiveAuthToken = authToken ?? prefs.getString('auth_token');
 
-      if (userEmail == null) return false;
-
-      debugPrint('📤 Sending token to backend...');
+      debugPrint('📤 Sending FCM token to backend...');
 
       final response = await http.post(
         Uri.parse('$_baseUrl/update-fcm-token'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (effectiveAuthToken != null && effectiveAuthToken.isNotEmpty)
+            'Authorization': 'Bearer $effectiveAuthToken',
+        },
         body: jsonEncode({
-          'email': userEmail,
+          'email': effectiveEmail,
           'fcm_token': token,
           'device_type': 'android',
           'firebase_app_id': _firebaseAppId,
         }),
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          debugPrint('✅ Token sent successfully');
+        if (data['status'] == true || data['success'] == true) {
+          debugPrint('✅ FCM Token synced with Laravel backend successfully');
           return true;
         }
       }
 
-      debugPrint('❌ Backend error: ${response.body}');
+      debugPrint('⚠️ Backend token update response: ${response.statusCode} - ${response.body}');
       return false;
     } catch (e) {
-      debugPrint('❌ Error: $e');
+      debugPrint('❌ FCM Token send error: $e');
       return false;
     }
   }
 
   // ====================================================================
-  // 📥 FETCH NOTIFICATIONS FROM BACKEND
+  // 🚪 CLEAR TOKEN ON LOGOUT (Laravel DB তে fcm_token null করা)
   // ====================================================================
-  Future<List<Map<String, dynamic>>> fetchNotifications() async {
+  Future<void> clearTokenOnLogout() async {
     try {
-      debugPrint('📥 Fetching notifications...');
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('auth_token');
+      final userEmail = prefs.getString('user_email');
 
-      final response = await http.post(
+      if (authToken != null && authToken.isNotEmpty) {
+        await http.post(
+          Uri.parse('$_baseUrl/update-fcm-token'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $authToken',
+          },
+          body: jsonEncode({
+            'email': userEmail,
+            'fcm_token': null,
+            'device_type': 'android',
+          }),
+        );
+      }
+      await prefs.remove('fcm_token');
+      try {
+        await _firebaseMessaging.deleteToken();
+        debugPrint('✅ Firebase FCM token deleted from device');
+      } catch (e) {
+        debugPrint('⚠️ Firebase deleteToken error: $e');
+      }
+      debugPrint('✅ FCM token cleared on logout');
+    } catch (e) {
+      debugPrint('❌ Error clearing FCM token on logout: $e');
+    }
+  }
+
+  // ====================================================================
+  // 📥 FETCH NOTIFICATIONS FROM BACKEND (RESTful GET /api/notifications)
+  // ====================================================================
+  Future<List<Map<String, dynamic>>> fetchNotifications({int page = 1, int perPage = 20}) async {
+    try {
+      debugPrint('📥 Fetching notifications (page $page)...');
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('auth_token');
+
+      // Try GET /notifications first
+      final response = await http.get(
+        Uri.parse('$_baseUrl/notifications?page=$page&per_page=$perPage'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (authToken != null && authToken.isNotEmpty)
+            'Authorization': 'Bearer $authToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['data'] != null) {
+          final dynamic listData = data['data'] is Map ? data['data']['data'] : data['data'];
+          if (listData is List) {
+            return List<Map<String, dynamic>>.from(listData);
+          }
+        }
+      }
+
+      // Fallback to legacy POST /get-notifications if needed
+      final legacyResponse = await http.post(
         Uri.parse('$_baseUrl/get-notifications'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'firebase_app_id': _firebaseAppId, 'limit': 50}),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (legacyResponse.statusCode == 200) {
+        final data = jsonDecode(legacyResponse.body);
         if (data['success'] == true) {
-          final notifications = List<Map<String, dynamic>>.from(
-            data['notifications'] ?? [],
-          );
-          debugPrint('✅ Fetched ${notifications.length} notifications');
-          return notifications;
+          return List<Map<String, dynamic>>.from(data['notifications'] ?? []);
         }
       }
 
-      debugPrint('❌ Failed: ${response.body}');
       return [];
     } catch (e) {
-      debugPrint('❌ Error: $e');
+      debugPrint('❌ Fetch notifications error: $e');
       return [];
     }
   }
 
   // ====================================================================
-  // ✅ MARK NOTIFICATION AS READ
+  // ✅ MARK NOTIFICATION AS READ (POST /api/notifications/{id}/mark-as-read)
   // ====================================================================
-  Future<bool> markAsRead(int notificationId) async {
+  Future<bool> markAsRead(dynamic notificationId) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('auth_token');
+
       final response = await http.post(
+        Uri.parse('$_baseUrl/notifications/$notificationId/mark-as-read'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (authToken != null && authToken.isNotEmpty)
+            'Authorization': 'Bearer $authToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      }
+
+      // Fallback
+      final fallbackResponse = await http.post(
         Uri.parse('$_baseUrl/mark-notification-read'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -393,11 +470,7 @@ class FirebaseNotificationService {
         }),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['success'] == true;
-      }
-      return false;
+      return fallbackResponse.statusCode == 200;
     } catch (e) {
       debugPrint('❌ Mark read error: $e');
       return false;

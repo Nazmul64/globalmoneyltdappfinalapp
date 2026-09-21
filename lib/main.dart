@@ -7,11 +7,19 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/onesignal_notification_service.dart';
 import 'services/firebase_notification_service.dart';
 import 'services/app_service.dart';
 import 'login.dart';
 import 'home_page.dart';
+import 'friend_request.dart';
+import 'screens/support_live_chat_screen.dart';
+import 'p2p.dart';
+import 'socialpost.dart';
+import 'p2p_withdraw_history.dart';
+import 'total_deposite.dart';
+import 'notification_service.dart';
 
 // ====================================================================
 // 🔥 FIREBASE BACKGROUND MESSAGE HANDLER
@@ -134,61 +142,111 @@ class _MyAppState extends State<MyApp> {
   }
 
   // ====================================================================
+  // ====================================================================
   // 🖱️ HANDLE NOTIFICATION CLICK
   // ====================================================================
-  void _handleNotificationClick(Map<String, dynamic> data) {
-    final actionUrl = data['data']?['action_url'] as String? ??
-        data['action_url'] as String?;
+  void _handleNotificationClick(Map<String, dynamic> data) async {
+    final payload = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+
+    final String type = (payload['type'] ?? data['type'] ?? '').toString().toLowerCase();
+    final actionUrl = (payload['action_url'] ?? data['action_url']) as String?;
 
     debugPrint('🔔 Processing notification click...');
+    debugPrint('   Type: $type');
+    debugPrint('   Payload: $payload');
     debugPrint('   Action URL: $actionUrl');
 
-    // ✅ Default: Navigate to notifications screen if no action URL
-    if (actionUrl == null || actionUrl.isEmpty) {
-      debugPrint('➡️  No action URL - navigating to /notifications');
-      _navigateTo('/notifications');
+    final currentState = navigatorKey.currentState;
+    if (currentState == null) {
+      debugPrint('⚠️ Navigator state is null');
       return;
     }
 
-    // ✅ Handle specific URLs
-    if (actionUrl.contains('/profile')) {
-      debugPrint('➡️  Navigating to /profile');
-      _navigateTo('/profile');
-    } else if (actionUrl.contains('/post/')) {
-      final postId = actionUrl.split('/').last;
-      debugPrint('➡️  Navigating to /post with ID: $postId');
-      _navigateToWithArgs('/post', postId);
-    } else if (actionUrl.contains('/messages')) {
-      debugPrint('➡️  Navigating to /messages');
-      _navigateTo('/messages');
-    } else if (actionUrl.contains('/notifications')) {
-      debugPrint('➡️  Navigating to /notifications');
-      _navigateTo('/notifications');
-    } else {
-      debugPrint('➡️  Unknown URL - navigating to /notifications');
-      _navigateTo('/notifications');
-    }
-  }
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
 
-  // ====================================================================
-  // 🧭 NAVIGATION HELPERS
-  // ====================================================================
-  void _navigateTo(String route) {
-    final currentState = navigatorKey.currentState;
-    if (currentState != null) {
-      currentState.pushNamed(route);
-    } else {
-      debugPrint('⚠️  Navigator state is null');
-    }
-  }
+    // 1. Handle by explicit notification 'type'
+    switch (type) {
+      case 'friend_request':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => FriendRequestsPage(authToken: token),
+          ),
+        );
+        return;
 
-  void _navigateToWithArgs(String route, dynamic arguments) {
-    final currentState = navigatorKey.currentState;
-    if (currentState != null) {
-      currentState.pushNamed(route, arguments: arguments);
-    } else {
-      debugPrint('⚠️  Navigator state is null');
+      case 'friend_accepted':
+      case 'new_post':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => const SocialFeedScreen(),
+          ),
+        );
+        return;
+
+      case 'chat_message':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => HomePage(authToken: token),
+          ),
+        );
+        return;
+
+      case 'admin_message':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => const SupportLiveChatScreen(),
+          ),
+        );
+        return;
+
+      case 'p2p_order':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => const P2PPage(),
+          ),
+        );
+        return;
+
+      case 'deposit':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => const DepositScreen(),
+          ),
+        );
+        return;
+
+      case 'withdraw':
+        currentState.push(
+          MaterialPageRoute(
+            builder: (context) => const P2PHistoryPage(),
+          ),
+        );
+        return;
     }
+
+    // 2. Handle by action_url fallback
+    if (actionUrl != null && actionUrl.isNotEmpty) {
+      if (actionUrl.contains('/profile')) {
+        currentState.push(MaterialPageRoute(builder: (_) => HomePage(authToken: token)));
+      } else if (actionUrl.contains('/post/')) {
+        currentState.push(MaterialPageRoute(builder: (_) => const SocialFeedScreen()));
+      } else if (actionUrl.contains('/messages')) {
+        currentState.push(MaterialPageRoute(builder: (_) => HomePage(authToken: token)));
+      } else {
+        currentState.push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+      }
+      return;
+    }
+
+    // 3. Default fallback to notifications screen
+    currentState.push(
+      MaterialPageRoute(
+        builder: (context) => const NotificationsScreen(),
+      ),
+    );
   }
 
   // ====================================================================
@@ -220,7 +278,11 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomePage(),
-        // '/notifications': (context) => const NotificationsScreen(),
+        '/notifications': (context) => const NotificationsScreen(),
+        '/social-feed': (context) => const SocialFeedScreen(),
+        '/p2p': (context) => const P2PPage(),
+        '/support-chat': (context) => const SupportLiveChatScreen(),
+        '/wallet-history': (context) => const P2PHistoryPage(),
       },
     );
   }
