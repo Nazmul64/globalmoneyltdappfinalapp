@@ -759,10 +759,12 @@ class _TaskPageState extends State<TaskPage>
           setState(() => _adRunning = true);
           _startAdTimerOverlay('stario');
         },
-        onAdHidden: () {
+        onAdHidden: () async {
           _logInfo('👋 Start.io ad hidden');
           setState(() => _adRunning = false);
           _hideAllOverlays();
+          await _trackAdViewClick();
+          await _onAdTimerComplete();
         },
         onAdClicked: () {
           _logInfo('👆 Start.io ad clicked');
@@ -1359,9 +1361,6 @@ class _TaskPageState extends State<TaskPage>
       }
     }
 
-    // Track ad click before showing
-    await _trackAdViewClick();
-
     try {
       _logInfo('🎬 Attempting to show ad...');
 
@@ -1509,11 +1508,25 @@ class _TaskPageState extends State<TaskPage>
         final jsonData = jsonDecode(response.body);
         if (jsonData['data'] != null) {
           final data = jsonData['data'];
+          final adsWatchedToday = _parseInt(data['ads_watched_today']);
+          final adsInCycle = _parseInt(data['ads_watched_in_current_cycle']);
+          final cycleCompleted = data['cycle_completed'] == true;
+          final startBreakTimer = data['start_break_timer'] == true;
+
           setState(() {
-            _adsWatched = _parseInt(data['ads_watched_today']);
-            _cycleAds = _parseInt(data['ads_watched_in_current_cycle']);
+            _adsWatched = adsWatchedToday;
+            _cycleAds = adsInCycle;
+            if (cycleCompleted) {
+              if (startBreakTimer) {
+                _breakActive = true;
+                _showClaim = false;
+              } else {
+                _breakActive = false;
+                _showClaim = true;
+              }
+            }
           });
-          _logSuccess('✅ View tracked: $_adsWatched/$_dailyLimit ads');
+          _logSuccess('✅ View tracked: $_adsWatched/$_dailyLimit ads (Cycle: $_cycleAds/$_adBrack)');
         }
       } else if (response.statusCode == 401) {
         _showSnackBar('Session expired. Please login.', isError: true);
@@ -1652,18 +1665,25 @@ class _TaskPageState extends State<TaskPage>
 
       if (response.statusCode == 200) {
         final jsonData = jsonDecode(response.body);
-        if (jsonData['status'] == true && jsonData['data'] != null) {
+        if ((jsonData['status'] == true || jsonData['success'] == true) && jsonData['data'] != null) {
           final data = jsonData['data'];
-          final earned = _parseDouble(data['earned']);
+          final earned = _parseDouble(data['earned'] ?? data['reward_amount']);
+          final userBalance = _parseDouble(data['user_balance'] ?? data['balance']);
+          final todayEarning = _parseDouble(data['today_earning']);
+          final totalEarning = _parseDouble(data['total_earning']);
           final dailyLimitReached = data['daily_limit_reached'] == true;
 
           setState(() {
+            _balance = userBalance;
+            _todayEarning = todayEarning;
+            _totalEarning = totalEarning;
             _showClaim = false;
             _adLoading = false;
             _dailyLimitReached = dailyLimitReached;
+            _cycleAds = 0;
           });
 
-          await _fetchUserEarningData();
+          _fetchUserEarningData();
 
           if (dailyLimitReached) {
             _showSnackBar(
@@ -1672,7 +1692,7 @@ class _TaskPageState extends State<TaskPage>
             );
           } else {
             _showSnackBar(
-              '🎉 \$${earned.toStringAsFixed(2)} Claimed Successfully!',
+              '🎉 \$${earned.toStringAsFixed(2)} Claimed and Added to Balance!',
               isSuccess: true,
             );
             if (mounted && _canWatchAd) {
@@ -1691,8 +1711,15 @@ class _TaskPageState extends State<TaskPage>
         _redirectToLogin();
       } else {
         setState(() => _adLoading = false);
+        String message = 'Claim failed. Please try again.';
+        try {
+          final jsonData = jsonDecode(response.body);
+          if (jsonData['message'] != null && jsonData['message'].toString().isNotEmpty) {
+            message = jsonData['message'].toString();
+          }
+        } catch (_) {}
         await _fetchUserEarningData();
-        _showSnackBar('Claim processing. Synchronized with server.', isSuccess: true);
+        _showSnackBar(message, isError: true);
       }
     } catch (e) {
       setState(() => _adLoading = false);
