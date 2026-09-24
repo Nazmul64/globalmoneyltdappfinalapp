@@ -321,7 +321,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        if (data['success'] == true) {
+        if (data['success'] == true || data['status'] == true) {
           final contactsData = data['data'] as List;
           List<ChatContact> contacts = [];
 
@@ -668,12 +668,31 @@ class ChatContact {
       activityDate = DateTime.tryParse(timeStr);
     }
 
+    final dynamic rawVerified = json['is_verified'] ?? json['kyc_approved'] ?? json['verified'];
+    bool isVer = rawVerified == true ||
+        rawVerified == 1 ||
+        rawVerified == '1' ||
+        rawVerified?.toString().toLowerCase() == 'true';
+
+    final kycStatus = (json['kyc_status'] ?? json['verification_status'] ?? json['status'])
+        ?.toString()
+        .toLowerCase();
+    if (kycStatus == 'verified' || kycStatus == 'approved') {
+      isVer = true;
+    }
+
+    final photoUrl = json['photo_url']?.toString() ??
+        json['photo']?.toString() ??
+        json['image']?.toString() ??
+        json['avatar']?.toString() ??
+        json['profile_photo']?.toString();
+
     return ChatContact(
       id: _parseInt(json['id']),
       name: json['name']?.toString() ?? 'Unknown User',
       email: json['email']?.toString() ?? '',
-      image: json['photo']?.toString() ?? json['image']?.toString(),
-      isVerified: json['is_verified'] == true || json['is_verified'] == 1,
+      image: photoUrl,
+      isVerified: isVer,
       lastMessage: lastMsg,
       lastMessageTime: timeStr,
       lastActivity: activityDate,
@@ -1409,13 +1428,13 @@ class ContactTile extends StatelessWidget {
     );
   }
 
-  /// ✅ 🔥 Verification badge - SHOWS IN CONTACT LIST
+  /// ✅ 🔥 Verification badge - SHOWS IN CONTACT LIST (Blue Verified Badge)
   Widget _buildVerificationBadge() {
     if (contact.isVerified) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: Colors.green,
+          color: const Color(0xFF2196F3),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -2071,13 +2090,13 @@ class _ChatAreaState extends State<ChatArea> {
     );
   }
 
-  /// ✅ 🔥 Verification badge in chat header
+  /// ✅ 🔥 Verification badge in chat header (Blue Verified Badge)
   Widget _buildVerificationBadge() {
     if (widget.contact.isVerified) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: Colors.green,
+          color: const Color(0xFF2196F3),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -2714,13 +2733,13 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          // 🔥 Verification badge in message bubble
+          // 🔥 Verification badge in message bubble (Blue Verified Badge)
           if (contact.isVerified) ...[
             const SizedBox(width: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.green,
+                color: const Color(0xFF2196F3),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(

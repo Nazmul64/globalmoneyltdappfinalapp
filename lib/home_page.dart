@@ -1014,8 +1014,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   userData['user']['email']; // ✅ Store email for OneSignal
               _userBalance =
                   double.tryParse(userData['balance'].toString()) ?? 0.0;
-              _referralCode = userData['ref_code']?.toString() ?? '---';
-              _isKycApproved = userData['kyc_approved'] == true;
+              final dynamic rawKyc = userData['kyc_approved'] ?? userData['is_verified'] ?? (userData['user'] is Map ? (userData['user']['is_verified'] ?? userData['user']['kyc_approved']) : null);
+              final String? kycStatus = (userData['kyc_status'] ?? userData['verification_status'] ?? userData['status'] ?? (userData['user'] is Map ? (userData['user']['kyc_status'] ?? userData['user']['verification_status'] ?? userData['user']['status']) : null))?.toString().toLowerCase();
+              _isKycApproved = rawKyc == true ||
+                  rawKyc == 1 ||
+                  rawKyc == '1' ||
+                  rawKyc?.toString().toLowerCase() == 'true' ||
+                  kycStatus == 'verified' ||
+                  kycStatus == 'approved';
 
               // ✅ CRITICAL: Use the fixed _buildProfilePhotoUrl method
               _profilePhotoUrl = _buildProfilePhotoUrl(
