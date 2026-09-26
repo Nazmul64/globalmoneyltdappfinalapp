@@ -29,7 +29,14 @@ class User {
           json['user_photo']?.toString() ??
           json['image']?.toString(),
       bio: json['bio']?.toString(),
-      isVerified: json['is_verified'] == true || json['is_verified'] == 1,
+      isVerified: json['is_verified'] == true ||
+          json['is_verified'] == 1 ||
+          json['is_verified'] == '1' ||
+          json['is_verified']?.toString().toLowerCase() == 'true' ||
+          json['author_is_verified'] == true ||
+          json['kyc_approved'] == true ||
+          json['kyc_status'] == 'verified' ||
+          json['verification_status'] == 'verified',
     );
   }
 

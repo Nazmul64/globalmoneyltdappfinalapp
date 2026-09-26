@@ -595,6 +595,11 @@ class _LoginScreenState extends State<LoginScreen> {
         if (user["photo"] != null && user["photo"].toString().isNotEmpty) {
           await prefs.setString('user_photo', user["photo"].toString());
         }
+        final dynamic refCode = user["referral_code"] ?? user["ref_code"] ?? user["refer_code"];
+        if (refCode != null && refCode.toString().isNotEmpty) {
+          await prefs.setString('referral_code', refCode.toString());
+          await prefs.setString('ref_code', refCode.toString());
+        }
 
         debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         debugPrint('✅ LOGIN SUCCESSFUL');

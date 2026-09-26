@@ -20,6 +20,8 @@ class Post {
   final User? user;
   final List<Comment>? comments;
   bool isLiked;
+  final bool isVerified;
+  final bool authorIsVerified;
 
   Post({
     required this.id,
@@ -37,9 +39,20 @@ class Post {
     this.user,
     this.comments,
     this.isLiked = false,
+    this.isVerified = false,
+    this.authorIsVerified = false,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
+    final bool postVerified = json['is_verified'] == true ||
+        json['is_verified'] == 1 ||
+        json['is_verified'] == '1' ||
+        json['is_verified']?.toString().toLowerCase() == 'true';
+    final bool authorVerified = json['author_is_verified'] == true ||
+        json['author_is_verified'] == 1 ||
+        json['author_is_verified'] == '1' ||
+        json['author_is_verified']?.toString().toLowerCase() == 'true';
+
     return Post(
       id: _parseId(json['id']),
       userId: _parseId(json['user_id']),
@@ -58,6 +71,8 @@ class Post {
           ? (json['comments'] as List).map((c) => Comment.fromJson(c)).toList()
           : null,
       isLiked: json['is_liked'] == true || json['is_liked'] == 1,
+      isVerified: postVerified || authorVerified,
+      authorIsVerified: authorVerified,
     );
   }
 
@@ -154,6 +169,8 @@ class Post {
       'updated_at': updatedAt.toIso8601String(),
       'user': user?.toJson(),
       'is_liked': isLiked,
+      'is_verified': isVerified,
+      'author_is_verified': authorIsVerified,
     };
   }
 
@@ -173,6 +190,8 @@ class Post {
     User? user,
     List<Comment>? comments,
     bool? isLiked,
+    bool? isVerified,
+    bool? authorIsVerified,
   }) {
     return Post(
       id: id ?? this.id,
@@ -190,6 +209,8 @@ class Post {
       user: user ?? this.user,
       comments: comments ?? this.comments,
       isLiked: isLiked ?? this.isLiked,
+      isVerified: isVerified ?? this.isVerified,
+      authorIsVerified: authorIsVerified ?? this.authorIsVerified,
     );
   }
 }

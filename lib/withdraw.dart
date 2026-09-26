@@ -588,7 +588,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                "উত্তোলন স্থগিত (Withdrawal Blocked)",
+                "Withdrawal Blocked",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
@@ -596,7 +596,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
         ),
         content: Text(
           customMessage ??
-              "আপনার অ্যাকাউন্ট থেকে উইথড্র ও P2P USDT সেল সাময়িকভাবে বন্ধ আছে। বিস্তারিত জানতে সাপোর্টে যোগাযোগ করুন।",
+              "Your withdrawal and P2P USDT sell are temporarily disabled. Please contact support.",
           style: const TextStyle(fontSize: 14, height: 1.4),
         ),
         actions: [
@@ -605,7 +605,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
               Navigator.pop(ctx);
               Navigator.pop(context);
             },
-            child: const Text("ঠিক আছে",
+            child: const Text("OK",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ),
         ],

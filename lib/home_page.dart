@@ -819,6 +819,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         isValid = true;
       }
 
+      final savedRef = prefs.getString('referral_code') ?? prefs.getString('ref_code');
+      if (savedRef != null && savedRef.isNotEmpty && savedRef != 'null' && savedRef != '---') {
+        _referralCode = savedRef;
+      }
+
       _authToken = isValid ? token : null;
       _isLoggedIn = isValid;
 
@@ -1007,13 +1012,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (data['success'] == true) {
           final userData = data['data'];
 
+          // Extract referral code from all possible keys
+          final String? refCode = userData['referral_code']?.toString() ??
+              userData['ref_code']?.toString() ??
+              userData['refer_code']?.toString() ??
+              (userData['user'] is Map
+                  ? (userData['user']['referral_code']?.toString() ??
+                      userData['user']['ref_code']?.toString() ??
+                      userData['user']['refer_code']?.toString())
+                  : null);
+
           if (mounted) {
             setState(() {
-              _userName = userData['user']['name'] ?? 'User';
-              _userEmail =
-                  userData['user']['email']; // ✅ Store email for OneSignal
-              _userBalance =
-                  double.tryParse(userData['balance'].toString()) ?? 0.0;
+              _userName = userData['user'] is Map ? (userData['user']['name'] ?? 'User') : 'User';
+              _userEmail = userData['user'] is Map ? userData['user']['email'] : null;
+              _userBalance = double.tryParse(userData['balance'].toString()) ?? 0.0;
               final dynamic rawKyc = userData['kyc_approved'] ?? userData['is_verified'] ?? (userData['user'] is Map ? (userData['user']['is_verified'] ?? userData['user']['kyc_approved']) : null);
               final String? kycStatus = (userData['kyc_status'] ?? userData['verification_status'] ?? userData['status'] ?? (userData['user'] is Map ? (userData['user']['kyc_status'] ?? userData['user']['verification_status'] ?? userData['user']['status']) : null))?.toString().toLowerCase();
               _isKycApproved = rawKyc == true ||
@@ -1023,6 +1036,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   kycStatus == 'verified' ||
                   kycStatus == 'approved';
 
+              if (refCode != null && refCode.isNotEmpty && refCode != 'null' && refCode != '---') {
+                _referralCode = refCode;
+              }
+
               // ✅ CRITICAL: Use the fixed _buildProfilePhotoUrl method
               _profilePhotoUrl = _buildProfilePhotoUrl(
                 userData['profile_photo'],
@@ -1030,8 +1047,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             });
           }
 
+          if (refCode != null && refCode.isNotEmpty && refCode != 'null' && refCode != '---') {
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setString('referral_code', refCode);
+              prefs.setString('ref_code', refCode);
+            });
+          } else {
+            // Check fallback in SharedPreferences or API
+            SharedPreferences.getInstance().then((prefs) {
+              final saved = prefs.getString('referral_code') ?? prefs.getString('ref_code');
+              if (saved != null && saved.isNotEmpty && saved != 'null' && saved != '---' && mounted) {
+                setState(() => _referralCode = saved);
+              } else {
+                _fetchReferralCodeIfNeeded();
+              }
+            });
+          }
+
           print('✅ User loaded: $_userName');
           print('✅ User email: $_userEmail');
+          print('✅ Referral Code: $_referralCode');
           print('📸 Profile Photo URL: $_profilePhotoUrl');
 
           // ✅ Set OneSignal external user ID (email)
@@ -1066,6 +1101,44 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
     } catch (e) {
       print('❌ User data error: $e');
+    }
+  }
+
+  // ========================================
+  // FALLBACK REFERRAL CODE FETCH
+  // ========================================
+
+  Future<void> _fetchReferralCodeIfNeeded() async {
+    if (_referralCode != '---' && _referralCode.isNotEmpty) return;
+    if (!_isLoggedIn || _authToken == null) return;
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.totalReffer),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final String? code = data['referral_code']?.toString() ??
+            data['ref_code']?.toString() ??
+            data['data']?['referral_code']?.toString() ??
+            data['data']?['ref_code']?.toString();
+        if (code != null && code.isNotEmpty && code != 'null' && code != '---' && mounted) {
+          setState(() {
+            _referralCode = code;
+          });
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('referral_code', code);
+          await prefs.setString('ref_code', code);
+          print('✅ Referral code loaded from fallback: $_referralCode');
+        }
+      }
+    } catch (e) {
+      print('⚠️ Referral code fallback fetch error: $e');
     }
   }
 
