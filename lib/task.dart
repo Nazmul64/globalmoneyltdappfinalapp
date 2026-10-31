@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:startapp_sdk/startapp.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -99,6 +100,11 @@ class _TaskPageState extends State<TaskPage>
   bool _dailyLimitReached = false;
   String? _error;
 
+  // ======================== 24-HOUR TASK CYCLE TRACKING ========================
+  String? _nextTaskAvailableAt;
+  int _secondsUntilNextTask = 0;
+  Timer? _nextTaskCountdownTimer;
+
   // ======================== START.IO AD INSTANCES ========================
   final _sdk = StartAppSdk();
   StartAppBannerAd? _startIoTopBanner;
@@ -185,6 +191,9 @@ class _TaskPageState extends State<TaskPage>
 
   @override
   void dispose() {
+    // Dispose countdown timer
+    _nextTaskCountdownTimer?.cancel();
+
     // Dispose animation controllers
     _pulseController.dispose();
     _progressController.dispose();
@@ -628,8 +637,87 @@ class _TaskPageState extends State<TaskPage>
       _showClaim = data['show_claim_button'] == true;
       _dailyLimitReached = data['daily_limit_reached'] == true;
 
+      // 24-Hour Cycle & Next Task Unlock Tracking
+      _nextTaskAvailableAt = data['next_task_available_at']?.toString();
+      final secondsUntil = _parseInt(data['seconds_until_next_task']);
+
+      if (_dailyLimitReached) {
+        if (secondsUntil > 0) {
+          _secondsUntilNextTask = secondsUntil;
+        } else if (_nextTaskAvailableAt != null) {
+          try {
+            final unlockTime = DateTime.parse(_nextTaskAvailableAt!).toLocal();
+            final diff = unlockTime.difference(DateTime.now()).inSeconds;
+            _secondsUntilNextTask = diff > 0 ? diff : 0;
+          } catch (_) {
+            _secondsUntilNextTask = 0;
+          }
+        }
+        _startNextTaskCountdownTimer();
+      } else {
+        _secondsUntilNextTask = 0;
+        _nextTaskCountdownTimer?.cancel();
+      }
+
       _error = null;
     });
+  }
+
+  // ======================== 24-HOUR TASK CYCLE HELPERS ========================
+  /// Start countdown timer for next task unlock
+  void _startNextTaskCountdownTimer() {
+    _nextTaskCountdownTimer?.cancel();
+    if (_secondsUntilNextTask <= 0) return;
+
+    _nextTaskCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_secondsUntilNextTask > 0) {
+        setState(() {
+          _secondsUntilNextTask--;
+        });
+      } else {
+        timer.cancel();
+        _logInfo('⏰ Next task countdown reached zero! Auto-refreshing tasks...');
+        _fetchUserEarningData();
+      }
+    });
+  }
+
+  /// Format next task unlock time in user's device local timezone
+  String _formatNextTaskUnlockTime() {
+    if (_nextTaskAvailableAt == null) return 'Tomorrow';
+    try {
+      final unlock = DateTime.parse(_nextTaskAvailableAt!).toLocal();
+      final now = DateTime.now();
+      final timeStr = DateFormat('hh:mm a').format(unlock);
+
+      final isToday = unlock.year == now.year && unlock.month == now.month && unlock.day == now.day;
+      final tomorrow = now.add(const Duration(days: 1));
+      final isTomorrow = unlock.year == tomorrow.year && unlock.month == tomorrow.month && unlock.day == tomorrow.day;
+
+      if (isToday) {
+        return 'Today at $timeStr';
+      } else if (isTomorrow) {
+        return 'Tomorrow at $timeStr';
+      } else {
+        final dateStr = DateFormat('MMM dd').format(unlock);
+        return '$dateStr at $timeStr';
+      }
+    } catch (_) {
+      return 'Tomorrow';
+    }
+  }
+
+  /// Format countdown seconds to HH:MM:SS
+  String _formatCountdownTime(int totalSeconds) {
+    if (totalSeconds <= 0) return '00:00:00';
+    final hours = (totalSeconds ~/ 3600).toString().padLeft(2, '0');
+    final minutes = ((totalSeconds % 3600) ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$seconds';
   }
 
   // ======================== PARSING HELPERS ========================
@@ -2683,54 +2771,199 @@ class _TaskPageState extends State<TaskPage>
     );
   }
 
-  /// Build daily limit complete card
+  /// Build daily limit complete card with live countdown and local unlock time
   Widget _buildDailyLimitCompleteCard() {
+    final unlockTimeText = _formatNextTaskUnlockTime();
+    final countdownText = _formatCountdownTime(_secondsUntilNextTask);
+
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            Colors.green.withOpacity(0.2),
-            Colors.greenAccent.withOpacity(0.2),
+            Color(0xFF1B2E1E),
+            Color(0xFF132016),
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green, width: 2),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.greenAccent.withOpacity(0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.greenAccent.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.greenAccent.withOpacity(0.5), width: 1.5),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.greenAccent,
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Daily Limit Complete! 🎉',
+                        style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'All tasks completed for this 24-hour cycle',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
             Container(
-              padding: const EdgeInsets.all(12),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(14),
+                color: Colors.black.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
               ),
-              child: const Icon(
-                Icons.check_circle_rounded,
-                color: Colors.green,
-                size: 40,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded, color: Colors.amberAccent, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Next Tasks Unlock At',
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              unlockTimeText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                        ),
+                        child: const Text(
+                          'Device Time',
+                          style: TextStyle(
+                            color: Colors.amberAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_secondsUntilNextTask > 0) ...[
+                    const Divider(color: Colors.white12, height: 22),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.hourglass_bottom_rounded, color: Colors.cyanAccent, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Unlocks in:',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF003D3D), Color(0xFF005555)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.cyanAccent.withOpacity(0.6), width: 1),
+                          ),
+                          child: Text(
+                            countdownText,
+                            style: const TextStyle(
+                              color: Colors.cyanAccent,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '✅ Daily Limit Complete!',
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Come back tomorrow for more tasks',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  _showSnackBar('Checking for new tasks...', isSuccess: true);
+                  await _fetchUserEarningData();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.greenAccent.withOpacity(0.4)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.refresh_rounded, color: Colors.greenAccent, size: 18),
+                label: const Text(
+                  'Refresh Status',
+                  style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
