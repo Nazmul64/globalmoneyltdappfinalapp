@@ -469,7 +469,12 @@ class ApiService {
         }
       } else {
         debugPrint('❌ [sendMessage] Failed: ${response.statusCode}');
-        return ApiResponse.error('Failed: ${response.statusCode}');
+        try {
+          final errorData = json.decode(response.body);
+          return ApiResponse.error(errorData['message'] ?? 'Failed: ${response.statusCode}');
+        } catch (_) {
+          return ApiResponse.error('Failed: ${response.statusCode}');
+        }
       }
     } on TimeoutException {
       debugPrint('❌ [sendMessage] Timeout');
@@ -534,7 +539,12 @@ class ApiService {
           return ApiResponse.error(data['message'] ?? 'Failed');
         }
       } else {
-        return ApiResponse.error('Upload failed');
+        try {
+          final errorData = json.decode(response.body);
+          return ApiResponse.error(errorData['message'] ?? 'Upload failed (${response.statusCode})');
+        } catch (_) {
+          return ApiResponse.error('Upload failed');
+        }
       }
     } on TimeoutException {
       return ApiResponse.error('Upload timeout');
@@ -608,6 +618,75 @@ class ApiService {
       debugPrint('❌ Error: $e');
     }
   }
+
+  /// 🚫 Block a user
+  static Future<ApiResponse<Map<String, dynamic>>> blockUser(int userId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/chat/user/block'),
+            headers: headers,
+            body: json.encode({'blocked_id': userId}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return ApiResponse.success(data['data'] as Map<String, dynamic>? ?? {});
+      } else {
+        return ApiResponse.error(data['message'] ?? 'Failed to block user');
+      }
+    } catch (e) {
+      return ApiResponse.error('Error blocking user: $e');
+    }
+  }
+
+  /// 🟢 Unblock a user
+  static Future<ApiResponse<Map<String, dynamic>>> unblockUser(int userId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/chat/user/unblock'),
+            headers: headers,
+            body: json.encode({'blocked_id': userId}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        return ApiResponse.success(data['data'] as Map<String, dynamic>? ?? {});
+      } else {
+        return ApiResponse.error(data['message'] ?? 'Failed to unblock user');
+      }
+    } catch (e) {
+      return ApiResponse.error('Error unblocking user: $e');
+    }
+  }
+
+  /// 🔍 Get block status
+  static Future<ApiResponse<Map<String, dynamic>>> getBlockStatus(int userId) async {
+    try {
+      final headers = await getHeaders();
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/chat/user/block-status?user_id=$userId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return ApiResponse.success(data['data'] as Map<String, dynamic>);
+        }
+      }
+      return ApiResponse.error('Could not fetch block status');
+    } catch (e) {
+      return ApiResponse.error('Error: $e');
+    }
+  }
 }
 
 // ==================== MODELS ====================
@@ -630,6 +709,8 @@ class ChatContact {
   final String email;
   String? image; // 🔥 Populated from /chat-profile-user API
   bool isVerified;
+  bool isBlockedByMe;
+  bool isBlockedByThem;
   String? lastMessage;
   String? lastMessageTime;
   DateTime? lastActivity;
@@ -640,6 +721,8 @@ class ChatContact {
     required this.email,
     this.image,
     this.isVerified = false,
+    this.isBlockedByMe = false,
+    this.isBlockedByThem = false,
     this.lastMessage,
     this.lastMessageTime,
     this.lastActivity,
@@ -687,12 +770,21 @@ class ChatContact {
         json['avatar']?.toString() ??
         json['profile_photo']?.toString();
 
+    final bool isBlockedByMe = json['is_blocked_by_me'] == true ||
+        json['is_blocked_by_me'] == 1 ||
+        json['is_blocked_by_me'] == '1';
+    final bool isBlockedByThem = json['is_blocked_by_them'] == true ||
+        json['is_blocked_by_them'] == 1 ||
+        json['is_blocked_by_them'] == '1';
+
     return ChatContact(
       id: _parseInt(json['id']),
       name: json['name']?.toString() ?? 'Unknown User',
       email: json['email']?.toString() ?? '',
       image: photoUrl,
       isVerified: isVer,
+      isBlockedByMe: isBlockedByMe,
+      isBlockedByThem: isBlockedByThem,
       lastMessage: lastMsg,
       lastMessageTime: timeStr,
       lastActivity: activityDate,
@@ -1371,6 +1463,31 @@ class ContactTile extends StatelessWidget {
                         const SizedBox(width: 6),
                         // 🔥 Verification badge
                         _buildVerificationBadge(),
+                        if (contact.isBlockedByMe) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.35),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: Colors.red.shade300,
+                                width: 0.5,
+                              ),
+                            ),
+                            child: const Text(
+                              'Blocked',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 3),
@@ -1564,6 +1681,11 @@ class _ChatAreaState extends State<ChatArea> {
   String? _receiverPhoto;
   int? _currentUserId;
 
+  // 🚫 Block state
+  bool isBlockedByMe = false;
+  bool isBlockedByThem = false;
+  bool isBlockLoading = false;
+
   final List<String> _emojis = [
     '😀',
     '😃',
@@ -1640,10 +1762,115 @@ class _ChatAreaState extends State<ChatArea> {
   @override
   void initState() {
     super.initState();
+    isBlockedByMe = widget.contact.isBlockedByMe;
+    isBlockedByThem = widget.contact.isBlockedByThem;
     debugPrint('🚀 [ChatArea] Initializing for ${widget.contact.name}');
     _loadPhotos();
     _loadMessages();
+    _loadBlockStatus();
     _startPolling();
+  }
+
+  /// 🚫 Load block status between users
+  Future<void> _loadBlockStatus() async {
+    try {
+      final res = await ApiService.getBlockStatus(widget.contact.id);
+      if (res.success && res.data != null && mounted) {
+        setState(() {
+          isBlockedByMe = res.data!['is_blocked_by_me'] == true;
+          isBlockedByThem = res.data!['is_blocked_by_them'] == true;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [ChatArea] Error loading block status: $e');
+    }
+  }
+
+  /// 🚫 Confirm block / unblock action dialog
+  void _confirmBlockToggle() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              isBlockedByMe ? Icons.check_circle_outline : Icons.block,
+              color: isBlockedByMe ? Colors.green : Colors.red,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isBlockedByMe ? 'Unblock User' : 'Block User',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          isBlockedByMe
+              ? 'Are you sure you want to unblock ${widget.contact.name}? You will be able to send and receive messages.'
+              : 'Are you sure you want to block ${widget.contact.name}? Neither of you will be able to send messages while blocked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isBlockedByMe ? Colors.green : Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _handleBlockToggle();
+            },
+            child: Text(
+              isBlockedByMe ? 'Unblock' : 'Block',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🚫 Execute block / unblock API call
+  Future<void> _handleBlockToggle() async {
+    setState(() => isBlockLoading = true);
+    try {
+      if (isBlockedByMe) {
+        final res = await ApiService.unblockUser(widget.contact.id);
+        if (res.success) {
+          setState(() {
+            isBlockedByMe = false;
+            isBlockedByThem = res.data?['is_blocked_by_them'] == true;
+          });
+          widget.contact.isBlockedByMe = false;
+          _showSnackBar('Unblocked ${widget.contact.name}', isError: false);
+        } else {
+          _showSnackBar(res.error ?? 'Failed to unblock', isError: true);
+        }
+      } else {
+        final res = await ApiService.blockUser(widget.contact.id);
+        if (res.success) {
+          setState(() {
+            isBlockedByMe = true;
+            isBlockedByThem = res.data?['is_blocked_by_them'] == true;
+          });
+          widget.contact.isBlockedByMe = true;
+          _showSnackBar('Blocked ${widget.contact.name}', isError: false);
+        } else {
+          _showSnackBar(res.error ?? 'Failed to block', isError: true);
+        }
+      }
+    } finally {
+      if (mounted) setState(() => isBlockLoading = false);
+    }
   }
 
   /// 📷 🔥 Load both sender and receiver photos
@@ -1996,19 +2223,93 @@ class _ChatAreaState extends State<ChatArea> {
                     ),
                     const SizedBox(width: 6),
                     _buildVerificationBadge(),
+                    if (isBlockedByMe) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Blocked',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const Text(
-                  'Online',
-                  style: TextStyle(fontSize: 11, color: Colors.white70),
+                Text(
+                  isBlockedByMe
+                      ? 'Blocked by you'
+                      : (isBlockedByThem ? 'User unavailable' : 'Online'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isBlockedByMe || isBlockedByThem
+                        ? Colors.red.shade100
+                        : Colors.white70,
+                  ),
                 ),
               ],
             ),
           ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white, size: 22),
-            onPressed: _loadMessages,
+            onPressed: () {
+              _loadMessages();
+              _loadBlockStatus();
+            },
             tooltip: 'Refresh',
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white, size: 22),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            onSelected: (value) {
+              if (value == 'block_toggle') {
+                _confirmBlockToggle();
+              } else if (value == 'refresh') {
+                _loadMessages();
+                _loadBlockStatus();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: const [
+                    Icon(Icons.refresh, size: 20, color: Colors.black87),
+                    SizedBox(width: 8),
+                    Text('Refresh Chat'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'block_toggle',
+                child: Row(
+                  children: [
+                    Icon(
+                      isBlockedByMe ? Icons.check_circle_outline : Icons.block,
+                      size: 20,
+                      color: isBlockedByMe ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isBlockedByMe ? 'Unblock User' : 'Block User',
+                      style: TextStyle(
+                        color: isBlockedByMe ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2065,11 +2366,36 @@ class _ChatAreaState extends State<ChatArea> {
                     const SizedBox(width: 6),
                     // 🔥 Verification badge in chat header
                     _buildVerificationBadge(),
+                    if (isBlockedByMe) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Blocked',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const Text(
-                  'Online',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                Text(
+                  isBlockedByMe
+                      ? 'Blocked by you'
+                      : (isBlockedByThem ? 'User unavailable' : 'Online'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isBlockedByMe || isBlockedByThem
+                        ? Colors.red.shade100
+                        : Colors.white70,
+                  ),
                 ),
               ],
             ),
@@ -2079,10 +2405,64 @@ class _ChatAreaState extends State<ChatArea> {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              onPressed: _loadMessages,
-              tooltip: 'Refresh',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  onPressed: () {
+                    _loadMessages();
+                    _loadBlockStatus();
+                  },
+                  tooltip: 'Refresh',
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onSelected: (value) {
+                    if (value == 'block_toggle') {
+                      _confirmBlockToggle();
+                    } else if (value == 'refresh') {
+                      _loadMessages();
+                      _loadBlockStatus();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(
+                        children: const [
+                          Icon(Icons.refresh, size: 20, color: Colors.black87),
+                          SizedBox(width: 8),
+                          Text('Refresh Chat'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'block_toggle',
+                      child: Row(
+                        children: [
+                          Icon(
+                            isBlockedByMe ? Icons.check_circle_outline : Icons.block,
+                            size: 20,
+                            color: isBlockedByMe ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isBlockedByMe ? 'Unblock User' : 'Block User',
+                            style: TextStyle(
+                              color: isBlockedByMe ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -2401,6 +2781,106 @@ class _ChatAreaState extends State<ChatArea> {
 
   /// ⌨️ Message input
   Widget _buildMessageInput() {
+    if (isBlockedByMe) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          boxShadow: [ThemeManager.getShadow(opacity: 0.1, blur: 8)],
+          border: Border(
+            top: BorderSide(
+              color: Colors.red.shade200,
+              width: 1,
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              const Icon(Icons.block, color: Colors.red, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'You blocked this user.',
+                  style: TextStyle(
+                    color: Colors.red.shade900,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                ),
+                onPressed: isBlockLoading ? null : _confirmBlockToggle,
+                child: isBlockLoading
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Unblock',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isBlockedByThem) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          boxShadow: [ThemeManager.getShadow(opacity: 0.1, blur: 8)],
+          border: Border(
+            top: BorderSide(
+              color: Colors.grey.shade300,
+              width: 1,
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.info_outline, color: Colors.grey.shade700, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'You cannot send messages to this user.',
+                style: TextStyle(
+                  color: Colors.grey.shade800,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

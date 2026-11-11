@@ -144,6 +144,10 @@ class ApiConfig {
   static const String chatSend         = '$baseUrl/chat/frontend/submit';
   static const String chatMarkRead     = '$baseUrl/chat/message/mark-read';
   static const String chatLastMessages = '$baseUrl/chat/last-messages';
+  static const String chatBlockUser    = '$baseUrl/chat/user/block';
+  static const String chatUnblockUser  = '$baseUrl/chat/user/unblock';
+  static const String chatBlockStatus  = '$baseUrl/chat/user/block-status';
+  static const String chatBlockedList  = '$baseUrl/chat/user/blocked-list';
 
   // ──────────────────────────────────────────────────────────────────
   // 9. USER-TO-AGENT SUPPORT CHAT

@@ -438,11 +438,12 @@ class _DepositScreenState extends State<DepositScreen> {
 
         if (data['success'] == true && data['data'] != null) {
           final newBalance = _parseAmount(data['data']['new_balance']);
+          final totalApproved = _parseAmount(data['data']['total_approved']);
 
           if (mounted) {
             setState(() {
               userBalance = newBalance;
-              totalApprovedFromTables = newBalance;
+              totalApprovedFromTables = totalApproved;
             });
           }
 
